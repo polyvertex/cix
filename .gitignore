@@ -1,0 +1,11 @@
+
+# development and test files
+/tmp/
+/t.*
+
+# sublimetext
+*.sublime-workspace
+
+# system cache
+.DS_Store
+Thumbs.db

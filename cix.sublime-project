@@ -1,0 +1,21 @@
+{
+    "folders":
+    [
+        {
+            "folder_exclude_patterns":
+            [
+                ".vs"
+            ],
+            "path": "."
+        }
+    ],
+    "settings":
+    {
+        "default_line_ending": "unix",
+        "default_encoding": "UTF-8",
+        "tab_size": 4,
+        "translate_tabs_to_spaces": true,
+        "trim_automatic_white_space": true,
+        "trim_trailing_white_space_on_save": true
+    }
+}
