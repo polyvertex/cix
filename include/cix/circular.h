@@ -21,30 +21,10 @@ namespace detail
         : std::true_type { };
 
     template <typename Container>
-    inline constexpr bool is_growable_v =
-        typename is_growable<Container>::value;
+    inline constexpr bool is_growable_v = is_growable<Container>::value;
 }
 
 
-// Implementation of a circular buffer based on either std::array or std::vector
-// container typically.
-//
-// circular::push() methods never fail. They loop once internal container is
-// filled and internal write cursor reached the end of the container.
-//
-// The *pos* argument passed to either method circular::at() or
-// circular::operator[] is the virtual index relative to the current internal
-// cursor. So that position zero always points to the oldest pushed element and
-// position (size() - 1) to the latest pushed element.
-//
-// circular::set_capacity() method is enabled only for underlying containers
-// that support the standard reserve(), resize() and shrink_to_fit() semantics.
-// There is a loss of data only if *new_capacity* is smaller than current
-// size(). In which case, only the latest pushed elements are kept. Otherwise,
-// elements may be relocated physically but internal state remains unchanged.
-//
-// See also circular_array and circular_vector shorthand types defined below for
-// a better understanding of the template arguments.
 template <
     typename ElementT,
     std::size_t InitialCapacity,
@@ -55,275 +35,264 @@ template <
 class circular
 {
 public:
-    typedef Container container_type;
+    typedef typename Container container_type;
 
-    typedef typename container_type::size_type size_type;
+    typedef std::size_t size_type;
+    typedef std::make_signed_t<size_type> difference_type;
 
-    typedef typename container_type::value_type value_type;
-    typedef typename container_type::reference reference;
-    typedef typename container_type::const_reference const_reference;
-    typedef typename container_type::pointer pointer;
-    typedef typename container_type::const_pointer const_pointer;
+    typedef typename ElementT value_type;
+    typedef value_type& reference;
+    typedef const value_type& const_reference;
+    typedef value_type* pointer;
+    typedef const value_type* const_pointer;
 
-    static constexpr std::size_t initial_capacity = InitialCapacity;
+    static constexpr size_type initial_capacity = InitialCapacity;
     static constexpr bool growable = detail::is_growable_v<Container>;
 
 
 public:
+    circular()
+        : m_capacity{initial_capacity}
+        , m_wpos{0}
+        , m_loops{0}
+    {
+        static_assert(initial_capacity <= std::numeric_limits<difference_type>::max());
+
+        if constexpr (growable)
+            this->resize(initial_capacity);
+    }
+
     ~circular() = default;
 
-    circular()
-        : m_size{0}
-        , m_wpos{0}
+    constexpr bool empty() const noexcept
     {
-        if constexpr (growable)
-            this->set_capacity(initial_capacity);
+        return !(m_wpos | m_loops);
     }
 
-
-    bool empty() const noexcept
+    constexpr bool full() const noexcept
     {
-        return !m_size;
+        return 0 != m_loops;
     }
 
-
-    size_type depth() const noexcept
+    constexpr size_type size() const noexcept
     {
-        return m_size;
+        return (m_loops > 0) ? m_capacity : m_wpos;
     }
 
-
-    size_type capacity() const noexcept
+    constexpr size_type capacity() const noexcept
     {
-        return m_container.size();
+        assert(m_container.size() == m_capacity);
+        return m_capacity;
     }
 
-
-    reference at(size_type pos)
+    constexpr void clear() noexcept
     {
-        const auto real_idx = this->translate_pos(pos);
-        return m_container[real_idx];
-    }
-
-    const_reference at(size_type pos) const
-    {
-        const auto real_idx = this->translate_pos(pos);
-        return m_container[real_idx];
-    }
-
-
-    reference operator[](size_type pos)
-    {
-        const auto real_idx = this->translate_pos(pos);
-        return m_container[real_idx];
-    }
-
-    const_reference operator[](size_type pos) const
-    {
-        const auto real_idx = this->translate_pos(pos);
-        return m_container[real_idx];
-    }
-
-
-    reference current()
-    {
-        const auto real_idx = this->translate_previous(0);
-        return m_container[real_idx];
-    }
-
-    const_reference current() const
-    {
-        const auto real_idx = this->translate_previous(0);
-        return m_container[real_idx];
-    }
-
-
-    // Get a reference to the element at ``current - depth``.
-    // Where *depth* being in ``[0 .. (m_size - 1)]``
-    reference previous(size_type depth=1)
-    {
-        const auto real_idx = this->translate_previous(depth);
-        return m_container[real_idx];
-    }
-
-    // Get a const reference to the element at ``current - depth``.
-    // Where *depth* being in ``[0 .. (m_size - 1)]``
-    const_reference previous(size_type depth=1) const
-    {
-        const auto real_idx = this->translate_previous(depth);
-        return m_container[real_idx];
-    }
-
-
-    void clear() noexcept
-    {
-        m_size = 0;
         m_wpos = 0;
+        m_loops = 0;
     }
 
-
-    // Advance current position and return a reference to the then-current
-    // element in container so that it can be modified.
-    reference push() noexcept
+    constexpr void push_back(const_reference item) noexcept
     {
-        const auto csize = m_container.size();
-
-        assert(m_size <= csize);
-        assert(m_wpos <= m_size);
-
-        if (m_size < csize && m_wpos == m_size)
-            ++m_size;
-
-        auto& elem_ref = m_container[m_wpos++];
-
-        if (m_wpos == csize)
+        assert(m_capacity > 0);
+        assert(m_wpos <= m_capacity);
+        if (m_capacity > 0)
         {
-            assert(m_size == csize);
-            m_wpos = 0;
+            if (m_wpos >= m_capacity)
+            {
+                m_wpos = 0;
+                if (!++m_loops)  // overflow?
+                    ++m_loops;
+            }
+            m_container[m_wpos++] = item;
         }
-
-        return elem_ref;
     }
 
-
-    // Advance current position and move *new_elem* to the then-current element
-    // in container. A reference to it is returned so that it can be modified.
-    reference push(value_type&& new_elem) noexcept
+    constexpr void push_back(value_type&& item) noexcept
     {
-        auto& elem_ref = this->push();
-        elem_ref = std::move(new_elem);
-        return elem_ref;
+        assert(m_capacity > 0);
+        assert(m_wpos <= m_capacity);
+        if (m_capacity > 0)
+        {
+            if (m_wpos >= m_capacity)
+            {
+                m_wpos = 0;
+                if (!++m_loops)  // overflow?
+                    ++m_loops;
+            }
+            m_container[m_wpos++] = std::move(item);
+        }
     }
 
+    constexpr const_reference front() const noexcept
+    {
+        return (*this)[0];  // oldest pos
+    }
 
-    // Resize the underlying container to decrease or increase history depth.
-    // `set_capacity` is defined only for resizable containers.
-    // No data loss unless ``new_capacity < depth()``.
+    constexpr reference front() noexcept
+    {
+        return (*this)[0];  // oldest pos
+    }
+
+    constexpr const_reference back() const noexcept
+    {
+        return (*this)[this->size() - 1];  // most recent pos
+    }
+
+    constexpr reference back() noexcept
+    {
+        return (*this)[this->size() - 1];  // most recent pos
+    }
+
+    constexpr const_reference at(size_type pos) const
+    {
+        return (*this)[pos];
+    }
+
+    constexpr reference at(size_type pos)
+    {
+        return (*this)[pos];
+    }
+
+    constexpr reference operator[](size_type pos)
+    {
+        assert(!this->empty());
+        assert(pos < this->size());
+        const auto idx = m_loops ? m_wpos % m_capacity + pos : pos;
+        return m_container[idx];
+    }
+
+    constexpr const_reference operator[](size_type pos) const
+    {
+        assert(!this->empty());
+        assert(pos < this->size());
+        const auto idx = m_loops ? m_wpos % m_capacity + pos : pos;
+        return m_container[idx];
+    }
+
     template <typename Dummy = Container>
     typename std::enable_if_t<detail::is_growable_v<Dummy>, void>
-    set_capacity(size_type new_capacity)
+    resize(size_type new_capacity)
     {
-        if (!new_capacity)
-        {
-            assert(0);
-            return;
-        }
+        assert(new_capacity <= std::numeric_limits<difference_type>::max());
 
-        const auto csize = m_container.size();
-
-        if (new_capacity == csize)
+        if (new_capacity == m_capacity)
             return;
 
-        if (m_size == 0 || csize == 0)
+        if (new_capacity <= 0)
         {
-            m_container.resize(new_capacity);
-            m_container.shrink_to_fit();
-            m_size = 0;
+            m_container.resize(1);
+            m_capacity = 0;
             m_wpos = 0;
+            m_loops = 0;
+        }
+        else if (this->empty())
+        {
+            assert(!m_wpos);
+            assert(!m_loops);
+            m_container.resize(new_capacity);
+            m_capacity = new_capacity;
+            m_wpos = 0;
+            m_loops = 0;
+        }
+        else if (0 == m_loops)
+        {
+            // CAUTION: m_container.resize() is assumed not to destroy first
+            // items (i.e. std::vector supported)
+            m_container.resize(new_capacity);
+            if (new_capacity <= m_capacity)
+                m_wpos = m_wpos % (new_capacity + 1);
+            m_capacity = new_capacity;
         }
         else
         {
-            container_type new_container(new_capacity);
-            size_type wpos =
-                (m_size <= new_capacity) ? 0 :
-                (m_size - new_capacity);
+            assert(m_loops > 0);
+            assert(this->size() == m_capacity);
 
-            for (; wpos < m_size; ++wpos)
+            const size_type new_size = std::min(new_capacity, m_capacity);
+            container_type new_container;
+            size_type new_wpos = 0;
+
+            // do not assume constructor is standard, call resize() explicitly
+            new_container.resize(new_capacity);
+
+            // move the tail of source buffer to the head of dest buffer
+            if (m_wpos < m_capacity && new_size > m_wpos)
             {
-                const auto src_idx = this->translate_pos(wpos);
-                new_container[wpos] = std::move(m_container[src_idx]);
+                const auto pos = m_wpos + (m_capacity - new_size);
+                assert(pos < m_capacity);
+
+                std::move(
+                    // std::execution::par_unseq,  // C++20
+                    std::next(
+                        m_container.begin(),
+                        static_cast<difference_type>(pos)),
+                    std::next(
+                        m_container.begin(),
+                        static_cast<difference_type>(m_capacity)),
+                    new_container.begin());
+
+                new_wpos += m_capacity - pos;
+                assert(new_wpos <= new_size);
+                assert(new_wpos <= new_capacity);
+            }
+
+            // move (part of) the head of source buffer to the tail of dest buffer
+            if (m_wpos > 0 && new_size > new_wpos)
+            {
+                const auto pos = m_wpos - (new_size - new_wpos);
+
+                std::move(
+                    // std::execution::par_unseq,  // C++20
+                    std::next(
+                        m_container.begin(),
+                        static_cast<difference_type>(pos)),
+                    std::next(
+                        m_container.begin(),
+                        static_cast<difference_type>(m_wpos)),
+                    new_container.begin());
+
+                new_wpos += m_wpos - pos;
+                assert(new_wpos <= new_size);
+                assert(new_wpos <= new_capacity);
             }
 
             m_container.swap(new_container);
-            m_container.shrink_to_fit();
-            m_size = wpos;
-            m_wpos = wpos;
+            m_capacity = new_capacity;
+            m_wpos = new_wpos;
+            m_loops = 0;
         }
     }
 
+    template <typename Dummy = Container>
+    typename std::enable_if_t<detail::is_growable_v<Dummy>, constexpr void>
+    shrink_to_fit()
+    {
+        m_container.shrink_to_fit();
+    }
 
-    // Give access to the underyling container object. Do not resize it!
-    // Use at your own risk.
-    container_type& container()
+    constexpr container_type& container()
     {
         return m_container;
     }
 
 
 private:
-    // Convert a history depth value into a real element index in the container.
-    // *depth* expected to be in [0 .. m_size].
-    size_type translate_previous(size_type depth) const
-    {
-        if (!m_size)
-            CIX_THROW_OUTRANGE("empty circular buffer");
-
-        if (depth >= m_size)
-        {
-            CIX_THROW_OUTRANGE(
-                "circular buffer history smaller than expected ({} < {})",
-                depth, m_size);
-        }
-
-        ++depth;  // m_wpos is always at the offset of the next element
-
-        auto idx = m_wpos;
-
-        do
-        {
-            if (idx == 0)
-            {
-                idx = m_size - 1;
-                --depth;
-            }
-            else
-            {
-                const auto step = std::min(depth, idx);
-                idx -= step;
-                depth -= step;
-            }
-        }
-        while (depth > 0);
-
-        return idx;
-    }
-
-    // Convert circular position index to the actual container index
-    size_type translate_pos(size_type pos) const
-    {
-        const auto csize = m_container.size();
-
-        assert(m_size <= csize);
-        assert(m_wpos <= m_size);
-
-        if (pos >= 0 && pos < m_size)
-        {
-            if (m_size < csize)
-                return pos;
-            else
-                return (m_wpos + pos) % m_size;
-        }
-
-        CIX_THROW_OUTRANGE("circular::offset");
-    }
-
-
-private:
     container_type m_container;
-    size_type m_size;
+    size_type m_capacity;
     size_type m_wpos;
+    size_type m_loops;
 };
 
 
 template <typename T, std::size_t N>
-using circular_array = typename circular<T, N, std::array<T, N>>;
+using circular_array = circular<T, N, std::array<T, N>>;
 
 template <
     typename T,
     std::size_t InitialCapacity,
     typename Allocator = std::allocator<T>>
 using circular_vector =
-    typename circular<T, InitialCapacity, std::vector<T, Allocator>>;
+    circular<T, InitialCapacity, std::vector<T, Allocator>>;
 
 
 }  // namespace cix

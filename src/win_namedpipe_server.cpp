@@ -5,7 +5,7 @@
 #include <cix/cix>
 #include <cix/detail/intro.h>
 
-#if defined(CIX_ENABLE_WIN_NAMEDPIPE_SERVER) && (CIX_PLATFORM == CIX_PLATFORM_WINDOWS)
+#if defined(CIX_ENABLE_WIN_NAMEDPIPE_SERVER) && CIX_PLATFORM_WINDOWS
 
 namespace cix {
 
@@ -121,7 +121,7 @@ void win_namedpipe_server::stop()
 bool win_namedpipe_server::send(
     instance_token_t instance_token, bytes_t&& packet)
 {
-    cix::lock_guard lock(m_mutex);
+    std::scoped_lock lock(m_mutex);
 
     auto it = m_instances.find(instance_token);
     if (it == m_instances.end())
@@ -129,7 +129,7 @@ bool win_namedpipe_server::send(
 
     auto instance = it->second;
 
-    if (instance->send(std::move(packet)))
+    if (instance->write(std::move(packet)))
     {
         m_proceed.insert(instance_token);
         SetEvent(m_proceed_event);
@@ -144,15 +144,15 @@ bool win_namedpipe_server::send(
 
 bool win_namedpipe_server::send_to_first(bytes_t&& packet)
 {
-    cix::lock_guard lock(m_mutex);
+    std::scoped_lock lock(m_mutex);
 
     for (auto& instance_pair : m_instances)
     {
         auto& instance = instance_pair.second;
 
-        // std::move() call is ok here because send() only needs to move the
+        // std::move() call is ok here because write() only needs to move the
         // packet if instance is still connected - i.e. return value is true
-        if (instance->send(std::move(packet)))
+        if (instance->write(std::move(packet)))
         {
             m_proceed.insert(instance_pair.first);
             SetEvent(m_proceed_event);
@@ -166,7 +166,7 @@ bool win_namedpipe_server::send_to_first(bytes_t&& packet)
 
 std::size_t win_namedpipe_server::broadcast_packet(bytes_t&& packet)
 {
-    cix::lock_guard lock(m_mutex);
+    std::scoped_lock lock(m_mutex);
     std::size_t pushed = 0;
 
     for (auto& instance_pair : m_instances)
@@ -174,7 +174,7 @@ std::size_t win_namedpipe_server::broadcast_packet(bytes_t&& packet)
         auto& instance = instance_pair.second;
         bytes_t packet_copy(packet.begin(), packet.end());
 
-        if (instance->send(std::move(packet_copy)))
+        if (instance->write(std::move(packet_copy)))
         {
             m_proceed.insert(instance_pair.first);
             ++pushed;
@@ -188,6 +188,19 @@ std::size_t win_namedpipe_server::broadcast_packet(bytes_t&& packet)
 }
 
 
+std::size_t win_namedpipe_server::get_output_queue_size(
+    instance_token_t instance_token) const
+{
+    std::scoped_lock lock(m_mutex);
+
+    auto it = m_instances.find(instance_token);
+    if (it == m_instances.end())
+        return win_namedpipe_server::invalid_queue_size;
+
+    return it->second->output_queue_size();
+}
+
+
 bool win_namedpipe_server::disconnect_instance(instance_token_t instance_token)
 {
     cix::lock_guard lock(m_mutex);
@@ -197,6 +210,9 @@ bool win_namedpipe_server::disconnect_instance(instance_token_t instance_token)
         return false;
 
     auto instance = it->second;
+
+    lock.unlock();
+
     if (instance)
     {
         instance->disconnect();
@@ -229,6 +245,12 @@ void win_namedpipe_server::maintenance_thread()
             SetEvent(m_connect_event);
 
         wait_time = pipe_handle ? INFINITE : 5000;
+
+        // flush pending APCs first
+        while (
+            !pipe_handle &&
+            WAIT_IO_COMPLETION == WaitForSingleObjectEx(m_stop_event, 0, TRUE))
+        { ; }
 
         const auto wait_res = WaitForMultipleObjectsEx(
             static_cast<DWORD>(cix::countof(events)),
@@ -408,11 +430,11 @@ void win_namedpipe_server::create_instance(HANDLE pipe_handle)
 
 void win_namedpipe_server::handle_proceed_event()
 {
-    cix::lock_guard lock(m_mutex);
+    std::scoped_lock lock(m_mutex);
 
     decltype(m_proceed) proceed_instances;
 
-    assert(!m_proceed.empty());
+    // assert(!m_proceed.empty());
     m_proceed.swap(proceed_instances);
     ResetEvent(m_proceed_event);
 
@@ -434,7 +456,7 @@ void win_namedpipe_server::handle_proceed_event()
 }
 
 
-void win_namedpipe_server::notify_recv(instance_token_t token, bytes_t&& packet)
+void win_namedpipe_server::notify_read(instance_token_t token, bytes_t&& packet)
 {
     std::shared_ptr<listener_t> listener;
 
@@ -447,6 +469,25 @@ void win_namedpipe_server::notify_recv(instance_token_t token, bytes_t&& packet)
     {
         listener->on_namedpipe_recv(
             this->shared_from_this(), token, std::move(packet));
+    }
+}
+
+
+void win_namedpipe_server::notify_written(
+    instance_token_t token, bytes_t&& packet, std::size_t output_queue_size)
+{
+    std::shared_ptr<listener_t> listener;
+
+    {
+        std::scoped_lock lock(m_mutex);
+        listener = m_listener.lock();
+    }
+
+    if (listener)
+    {
+        listener->on_namedpipe_sent(
+            this->shared_from_this(), token, std::move(packet),
+            output_queue_size);
     }
 }
 
@@ -479,7 +520,7 @@ void WINAPI win_namedpipe_server::apc_completed_read(
 
     if (it == ms_overlapped_registry.end())
     {
-        // LOGWARNING(
+        // LOGWARN(
         //     "named pipe's read::overlapped_t not found in registry "
         //     "(error {}; read {} bytes)",
         //     error, bytes_read);
@@ -495,7 +536,7 @@ void WINAPI win_namedpipe_server::apc_completed_read(
     lock.unlock();
 
     auto instance = ol->instance.lock();
-    assert(instance);
+    // assert(instance);
 
     if (instance)
     {
@@ -507,7 +548,7 @@ void WINAPI win_namedpipe_server::apc_completed_read(
         if (error == 0 && bytes_read > 0)
         {
             ol->packet.resize(bytes_read);
-            instance->on_recv(ol);
+            instance->on_read(ol);
         }
         else
         {
@@ -523,14 +564,14 @@ void WINAPI win_namedpipe_server::apc_completed_write(
 {
     cix::lock_guard lock(win_namedpipe_server::ms_overlapped_registry_mutex);
 
-    CIX_UNVAR(bytes_written);
+    CIX_UNUSED(bytes_written);
 
     auto it = ms_overlapped_registry.find(
         reinterpret_cast<instance_t::overlapped_t*>(ol_));
 
     if (it == ms_overlapped_registry.end())
     {
-        // LOGWARNING(
+        // LOGWARN(
         //     "named pipe's write::overlapped_t not found in registry "
         //     "(error {}; written {} bytes)",
         //     error, bytes_written);
@@ -546,13 +587,14 @@ void WINAPI win_namedpipe_server::apc_completed_write(
     lock.unlock();
 
     auto instance = ol->instance.lock();
-    assert(instance);
+    // assert(instance);
 
     if (instance)
     {
         if (error == 0)
         {
-            instance->on_written();
+            instance->on_written(ol);
+            ol.reset();
         }
         else
         {
@@ -596,7 +638,7 @@ win_namedpipe_server::instance_t::~instance_t()
 
 void win_namedpipe_server::instance_t::disconnect()
 {
-    cix::lock_guard lock(m_mutex);
+    std::scoped_lock lock(m_mutex);
 
     // * disconnect() must be called instead of close() when calling thread is
     //   not the maintenance thread
@@ -628,7 +670,7 @@ void win_namedpipe_server::instance_t::close()
     }
 
     m_olread.reset();
-    m_olwrite.reset();
+    m_olwrites.clear();
 
     // clear() output
     decltype(m_output) empty_queue;
@@ -664,9 +706,19 @@ bool win_namedpipe_server::instance_t::orphan() const
 }
 
 
-void win_namedpipe_server::instance_t::proceed()
+std::size_t win_namedpipe_server::instance_t::output_queue_size() const
 {
     std::scoped_lock lock(m_mutex);
+    return m_output.size();
+}
+
+
+void win_namedpipe_server::instance_t::proceed()
+{
+    cix::lock_guard lock(m_mutex);
+    cix::lock_guard ol_lock(
+        win_namedpipe_server::ms_overlapped_registry_mutex,
+        std::defer_lock);  // do not lock yet
 
     // CAUTION: proceed() must be called from win_namedpipe_server's maintenance
     // thread only so that IO completion routines can be handled by it. This is
@@ -684,44 +736,89 @@ void win_namedpipe_server::instance_t::proceed()
     if (!m_pipe)
         return;
 
-    if (!m_output.empty() && !m_olwrite)
+    // cleanup m_olwrites
+    if (!m_output.empty() && !m_olwrites.empty())
+    {
+        // C++20
+        // std::erase_if(
+        //     m_olwrites,
+        //     [] (const auto& item) { return item->second.expired(); });
+        for (auto it = m_olwrites.begin(); it != m_olwrites.end(); )
+        {
+            if (it->second.expired())
+                it = m_olwrites.erase(it);
+            else
+                ++it;
+        }
+    }
+
+    if (!m_output.empty() &&
+        (win_namedpipe_server::max_pending_kernel_writes == 0 ||
+            m_olwrites.size() < win_namedpipe_server::max_pending_kernel_writes))
     {
         // create overlapped_t object
-        m_olwrite = std::make_shared<overlapped_t>(
-            this->shared_from_this(), std::move(m_output.front()));
-        // m_olwrite->ol.Offset = 0xffffffff;
-        // m_olwrite->ol.OffsetHigh = 0xffffffff;
-        m_output.pop();
+        auto wol = std::make_shared<overlapped_t>(
+            this->shared_from_this(),
+            m_output.front());  // CAUTION: front() gets swap()'ed
+        // wol->ol.Offset = 0xffffffff;
+        // wol->ol.OffsetHigh = 0xffffffff;
+
+        m_olwrites[wol.get()] = wol;
 
         // register overlapped_t object
-        {
-            std::scoped_lock ol_lock(
-                win_namedpipe_server::ms_overlapped_registry_mutex);
-
-            ms_overlapped_registry[m_olwrite.get()] = m_olwrite;
-        }
+        ol_lock.lock();
+        ms_overlapped_registry[wol.get()] = wol;
+        ol_lock.unlock();
 
         // start writing
         const auto write_success = WriteFileEx(
-            m_pipe, m_olwrite->packet.data(),
-            static_cast<DWORD>(m_olwrite->packet.size()),
-            reinterpret_cast<OVERLAPPED*>(m_olwrite.get()),
+            m_pipe, wol->packet.data(),
+            static_cast<DWORD>(wol->packet.size()),
+            reinterpret_cast<OVERLAPPED*>(wol.get()),
             win_namedpipe_server::apc_completed_write);
 
         if (!write_success)
         {
             const auto write_error = GetLastError();
-            CIX_UNVAR(write_error);
-            // LOGERROR(
-            //     "WriteFileEx on named pipe failed ({} bytes; error {})",
-            //     m_olwrite->packet.size(), write_error);
-            assert(0);
-            this->close();
-            return;
+
+            ol_lock.lock();
+            ms_overlapped_registry.erase(wol.get());
+            ol_lock.unlock();
+
+            m_output.front().swap(wol->packet);  // swap back
+            m_olwrites.erase(wol.get());
+            wol.reset();
+
+            if (write_error != ERROR_INVALID_USER_BUFFER &&
+                write_error != ERROR_NOT_ENOUGH_MEMORY)
+            {
+                // LOGERROR(
+                //     "WriteFileEx on named pipe failed ({} bytes; error {})",
+                //     m_output.front().size(), write_error);
+                // assert(0);
+
+                lock.unlock();
+                this->close();
+                return;
+            }
+            else
+            {
+#ifdef CIX_DEBUG
+                // TEST
+                OutputDebugStringW(cix::string::fmt(
+                    L"namedpipe write error: {}\n", write_error).c_str());
+                // assert(0);
+                // TESTEND
+#endif
+            }
+        }
+        else
+        {
+            m_output.pop();
         }
     }
 
-    if (!m_olread)  // && !m_olwrite)
+    if (!m_olread)
     {
         // create overlapped_t object
         m_olread = std::make_shared<overlapped_t>(
@@ -729,12 +826,9 @@ void win_namedpipe_server::instance_t::proceed()
             bytes_t(win_namedpipe_server::io_buffer_default_size, 0));
 
         // register overlapped_t object
-        {
-            std::scoped_lock ol_lock(
-                win_namedpipe_server::ms_overlapped_registry_mutex);
-
-            ms_overlapped_registry[m_olread.get()] = m_olread;
-        }
+        ol_lock.lock();
+        ms_overlapped_registry[m_olread.get()] = m_olread;
+        ol_lock.unlock();
 
         // start reading
         const auto read_success = ReadFileEx(
@@ -745,19 +839,44 @@ void win_namedpipe_server::instance_t::proceed()
 
         if (!read_success)
         {
-            const auto error = GetLastError();
+            const auto read_error = GetLastError();
 
-            // if (error != ERROR_BROKEN_PIPE)  // pipe has been closed
-            //     LOGERROR("ReadFileEx on named pipe failed (error {})", error);
+            if (read_error != ERROR_INVALID_USER_BUFFER &&
+                read_error != ERROR_NOT_ENOUGH_MEMORY)
+            {
+                // if (read_error != ERROR_BROKEN_PIPE)  // pipe has been closed
+                // {
+                //     LOGERROR(
+                //         "ReadFileEx on named pipe failed (error {})",
+                //         read_error);
+                // }
 
-            this->close();
-            return;
+                ol_lock.lock();
+                ms_overlapped_registry.erase(m_olread.get());
+                ol_lock.unlock();
+
+                m_olread.reset();
+
+                lock.unlock();
+                this->close();
+                return;
+            }
+            else
+            {
+#ifdef CIX_DEBUG
+                // TEST
+                OutputDebugStringW(cix::string::fmt(
+                    L"namedpipe read error: {}\n", read_error).c_str());
+                // assert(0);
+                // TESTEND
+#endif
+            }
         }
     }
 }
 
 
-bool win_namedpipe_server::instance_t::send(bytes_t&& packet)
+bool win_namedpipe_server::instance_t::write(bytes_t&& packet)
 {
     std::scoped_lock lock(m_mutex);
 
@@ -785,7 +904,7 @@ bool win_namedpipe_server::instance_t::send(bytes_t&& packet)
 }
 
 
-void win_namedpipe_server::instance_t::on_recv(std::shared_ptr<overlapped_t> ol)
+void win_namedpipe_server::instance_t::on_read(std::shared_ptr<overlapped_t> ol)
 {
     cix::lock_guard lock(m_mutex);
 
@@ -803,22 +922,35 @@ void win_namedpipe_server::instance_t::on_recv(std::shared_ptr<overlapped_t> ol)
     else
     {
         if (parent)
-            parent->notify_recv(m_token, std::move(ol->packet));
+            parent->notify_read(m_token, std::move(ol->packet));
 
         ol.reset();
+
         this->proceed();
     }
 }
 
 
-void win_namedpipe_server::instance_t::on_written()
+void win_namedpipe_server::instance_t::on_written(std::shared_ptr<overlapped_t> ol)
 {
-    std::scoped_lock lock(m_mutex);
+    cix::lock_guard lock(m_mutex);
 
-    m_olwrite.reset();
+    auto parent = m_parent.lock();
+
+    m_olwrites.erase(ol.get());
+    const auto output_queue_size = parent ? m_output.size() : 0;
+
+    lock.unlock();
+
+    if (parent)
+    {
+        parent->notify_written(
+            m_token, std::move(ol->packet), output_queue_size);
+    }
+
     this->proceed();
 }
 
 }  // namespace cix
 
-#endif  // #if defined(CIX_ENABLE_WIN_NAMEDPIPE_SERVER) && (CIX_PLATFORM == CIX_PLATFORM_WINDOWS)
+#endif  // #if defined(CIX_ENABLE_WIN_NAMEDPIPE_SERVER) && CIX_PLATFORM_WINDOWS

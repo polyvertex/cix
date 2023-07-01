@@ -8,23 +8,21 @@
 
 namespace cix {
 
-template <
-    typename T,
-    typename std::enable_if_t<
-        std::is_integral<T>::value &&
-        sizeof(T) >= 2, int>>
-inline memstream& memstream::write(const T value)
+template <typename T>
+inline std::enable_if_t<
+    std::is_integral<T>::value && sizeof(T) >= 2,
+    memstream&>
+memstream::write(const T value)
 {
-    return this->write(&tmp, sizeof(tmp));
+    return this->write(&value, sizeof(value));
 }
 
 
-template <
-    typename T,
-    typename std::enable_if_t<
-        std::is_integral<T>::value &&
-        sizeof(T) >= 2, int>>
-inline memstream& memstream::read(T& value)
+template <typename T>
+inline std::enable_if_t<
+    std::is_integral<T>::value && sizeof(T) >= 2,
+    memstream&>
+memstream::read(T& value)
 {
     return this->read(&value, sizeof(value));
 }

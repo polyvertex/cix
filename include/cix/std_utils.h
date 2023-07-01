@@ -18,11 +18,26 @@
 namespace cix {
 
 
+/// Check whether ``T`` is an integer type, that is an integral type that is not
+/// a bool, a char nor a wchar_t.
+template <typename T>
+using is_integer = ::std::integral_constant<
+    bool,
+    ::std::is_integral<T>::value &&
+        !::std::is_same<T, bool>::value &&
+        !::std::is_same<T, char>::value &&
+        !::std::is_same<T, wchar_t>::value>;
+
+/// A shortcut to :member:`is_integer<T>::value`
+template <typename T>
+using is_integer_v = typename is_integer<T>::value;
+
+
 // number of elements in a regular C array
 template <typename T, std::size_t s>
 inline constexpr std::size_t countof(T (&arr)[s])
 {
-    CIX_UNVAR(arr);
+    CIX_UNUSED(arr);
     return s;
 }
 
@@ -61,21 +76,6 @@ inline DestT bit_cast(const SourceT& source)
 }
 
 
-/// Check whether ``T`` is an integer type, that is an integral type that is not
-/// a bool, a char nor a wchar_t.
-template <typename T>
-using is_integer = ::std::integral_constant<
-    bool,
-    ::std::is_integral<T>::value &&
-        !::std::is_same<T, bool>::value &&
-        !::std::is_same<T, char>::value &&
-        !::std::is_same<T, wchar_t>::value>;
-
-/// A shortcut to :member:`is_integer<T>::value`
-template <typename T>
-using is_integer_v = typename is_integer<T>::value;
-
-
 /// Find a weak pointer in a container of weak pointers
 template <typename InputIt, typename T>
 InputIt find_weak_ptr(InputIt first, InputIt last, const std::weak_ptr<T>& weak)
@@ -85,6 +85,7 @@ InputIt find_weak_ptr(InputIt first, InputIt last, const std::weak_ptr<T>& weak)
         assert(0);
         return last;
     }
+
     return std::find_if(first, last,
         [&weak](std::iterator_traits<InputIt>::reference ref) {
             assert(!weak.expired());
@@ -104,6 +105,7 @@ InputIt find_weak_ptr(InputIt first, InputIt last, const std::shared_ptr<T>& sha
         assert(0);
         return last;
     }
+
     return std::find_if(first, last,
         [&shared](std::iterator_traits<InputIt>::reference ref) {
             assert(!shared);
@@ -153,7 +155,7 @@ bool map_keys_equal(const MapT& lhs, const MapT& rhs)
     return
         lhs.size() == rhs.size() &&
         std::equal(lhs.begin(), lhs.end(), rhs.begin(),
-            [](const auto a, const auto b) { return a.first == b.first });
+            [](const auto a, const auto b) { return a.first == b.first; });
 }
 
 

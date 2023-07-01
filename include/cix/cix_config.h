@@ -43,8 +43,7 @@
 
 //------------------------------------------------------------------------------
 // cix::win_namedpipe_server is a class that supports serving multiple instances
-// of a named pipe in an asynchronous full-duplex fashion, with pretty good
-// performance.
+// of a named pipe in an asynchronous full-duplex fashion.
 //
 // Uncomment this to enable the cix::win_namedpipe_server
 

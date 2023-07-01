@@ -9,13 +9,18 @@
 namespace cix {
 
 // thread id type
-typedef cix::best_fit<::std::thread::id>::unsigned_t tid_t;
+#if CIX_PLATFORM_WINDOWS
+    typedef cix::best_fit<DWORD>::unsigned_t tid_t;
+#else
+    typedef cix::best_fit<::std::thread::id>::unsigned_t tid_t;
+#endif
 
 // process id type
-#if CIX_PLATFORM == CIX_PLATFORM_WINDOWS
+#if CIX_PLATFORM_WINDOWS
     typedef cix::best_fit<DWORD>::unsigned_t pid_t;
 #else
-    typedef cix::best_fit<::pid_t>::unsigned_t pid_t;
+    // typedef cix::best_fit<::pid_t>::unsigned_t pid_t;
+    typedef ::pid_t pid_t;
 #endif
 
 

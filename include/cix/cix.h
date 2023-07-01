@@ -17,7 +17,7 @@
 #endif
 
 // CIX_DEBUG
-#if defined(__DEBUG) || defined(_DEBUG) || defined(DEBUG)
+#if defined(CIX_DEBUG) || defined(__DEBUG) || defined(_DEBUG) || defined(DEBUG)
     // from MSVC documentation: "_DEBUG is defined as 1 when the /LDd, /MDd, or
     // /MTd compiler option is set"
     #ifndef _DEBUG
@@ -45,10 +45,10 @@
 #include "platform.h"
 
 // external headers
-#include "cix_external_headers.h"
+#include "cix_sysheaders.h"
 
 // fmt library
-#include "cix_fmt.h"
+#include "cix_fmtlib.h"
 
 
 // guard header
@@ -60,7 +60,7 @@
 #include "assert.h"
 #include "macros.h"
 #include "exceptions.h"
-#include "enumbitops.h"
+#include "enum_bitops.h"
 
 // stdlib utils
 #include "std_utils.h"
@@ -90,13 +90,17 @@
 
 // threading
 #include "thread.h"
-#include "win_thread.h"
-#include "win_recursive_mutex.h"
 #include "lock_guard.h"
-#include "win_namedpipe_server.h"
 
-// windows console mini wrapper
+// windows specific
 #include "win_console.h"
+#include "win_dll.h"
+#include "win_global_mutex.h"
+#include "win_memdbg.h"
+#include "win_namedpipe_server.h"
+#include "win_recursive_mutex.h"
+#include "win_scoped_error_mode.h"
+#include "win_thread.h"
 
 
 #include "detail/outro.h"  // must remain last

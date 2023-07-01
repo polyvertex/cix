@@ -5,7 +5,7 @@
 #include <cix/cix>
 #include <cix/detail/intro.h>
 
-#if CIX_PLATFORM == CIX_PLATFORM_WINDOWS
+#if CIX_PLATFORM_WINDOWS
 
 namespace cix {
 
@@ -265,7 +265,7 @@ unsigned __stdcall win_thread::launch_pad::static_entry_point(void* param)
     {
         assert(0);
         // CIX_LOGFATAL(
-        //     WSTR("exception caught in thread #{}: {}"),
+        //     CIX_WSTR("exception caught in thread #{}: {}"),
         //     GetCurrentThreadId(), e.what());
         return exit_code_t::error;
     }
@@ -273,7 +273,7 @@ unsigned __stdcall win_thread::launch_pad::static_entry_point(void* param)
     {
         assert(0);
         // CIX_LOGFATAL(
-        //     WSTR("unknown exception caught in thread {}"),
+        //     CIX_WSTR("unknown exception caught in thread {}"),
         //     GetCurrentThreadId());
         return exit_code_t::error;
     }
@@ -282,4 +282,4 @@ unsigned __stdcall win_thread::launch_pad::static_entry_point(void* param)
 
 }  // namespace cix
 
-#endif  // #if CIX_PLATFORM == CIX_PLATFORM_WINDOWS
+#endif  // #if CIX_PLATFORM_WINDOWS

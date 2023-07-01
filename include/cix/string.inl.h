@@ -7,11 +7,14 @@ namespace string {
 
 namespace detail
 {
+    template <typename Char>
+    const auto& cfacet = std::use_facet<std::ctype<Char>>(std::locale::classic());
+
 #ifdef _WIN32
     inline std::wstring widen(const char* src, size_type len, bool strict)
     {
         if (!src || !*src || !len)
-            return std::wstring();
+            return {};
 
         const UINT src_cp = CP_UTF8;
         const DWORD flags = strict ? MB_ERR_INVALID_CHARS : 0;
@@ -19,16 +22,21 @@ namespace detail
 
         // deal with unlikely overflow - MultiByteToWideChar expects an int
         if (len <= static_cast<size_type>(std::numeric_limits<int>::max()))
+        {
             ilen = static_cast<int>(len);
+        }
         else
+        {
+            assert(0);
             ilen = static_cast<size_type>(std::numeric_limits<int>::max());
+        }
 
         // get required size
-        int count = MultiByteToWideChar(src_cp, flags, src, ilen, 0, 0);
+        int count = MultiByteToWideChar(src_cp, flags, src, ilen, nullptr, 0);
         if (count <= 0)
         {
             assert(0);
-            return std::wstring();
+            return {};
         }
 
         // convert
@@ -46,37 +54,45 @@ namespace detail
     inline std::string narrow(const wchar_t* src, size_type len, bool strict)
     {
         if (!src || !*src || !len)
-            return std::string();
+            return {};
 
         const UINT dest_cp = CP_UTF8;
         DWORD flags = 0;
         int ilen;
 
-        // WC_ERR_INVALID_CHARS flag is only supported on Vista or later
+        // WC_ERR_INVALID_CHARS flag is supported on Vista or later
 #if (WINVER >= 0x0600) || defined(WC_ERR_INVALID_CHARS)
-        flags |= strict ? WC_ERR_INVALID_CHARS : 0;
+        if (strict)
+            flags |= WC_NO_BEST_FIT_CHARS | WC_ERR_INVALID_CHARS;
 #else
-        CIX_UNVAR(strict);
+        if (strict)
+            flags |= WC_NO_BEST_FIT_CHARS;
 #endif
 
         // deal with unlikely overflow - WideCharToMultiByte expects an int
         if (len <= static_cast<size_type>(std::numeric_limits<int>::max()))
+        {
             ilen = static_cast<int>(len);
+        }
         else
+        {
+            assert(0);
             ilen = static_cast<size_type>(std::numeric_limits<int>::max());
+        }
 
         // get required size
-        int count = WideCharToMultiByte(dest_cp, flags, src, ilen, 0, 0, 0, 0);
+        int count = WideCharToMultiByte(
+            dest_cp, flags, src, ilen, nullptr, 0, nullptr, nullptr);
         if (count <= 0)
         {
             assert(0);
-            return std::string();
+            return {};
         }
 
         // convert
         std::string dest(static_cast<size_type>(count), 0);
         WideCharToMultiByte(
-            dest_cp, flags, src, ilen, dest.data(), count, 0, 0);
+            dest_cp, flags, src, ilen, dest.data(), count, nullptr, nullptr);
         while (dest.back() == 0)
             dest.erase(dest.size() - 1);
 
@@ -87,6 +103,7 @@ namespace detail
 
     // this fmt::arg_formatter forcefully casts signed integers to unsigned when
     // the 'x' or 'X' type specifier is used
+#if 0
     template <typename RangeT>
     class fmt_custom_arg_formatter : public ::fmt::arg_formatter<RangeT>
     {
@@ -139,6 +156,7 @@ namespace detail
             return base::operator()(value);
         }
     };
+#endif
 
 
     template <typename Char>
@@ -150,8 +168,10 @@ namespace detail
         std::basic_string<Char> out;
 
         out.reserve(final_length);
+
+        auto outit = std::back_inserter(out);
         for (const auto& view : glued_views)
-            std::copy(view.begin(), view.end(), std::back_inserter(out));
+            std::copy(view.begin(), view.end(), outit);
 
         return out;
     }
@@ -162,14 +182,14 @@ namespace detail
         std::size_t& out_length,
         std::vector<std::basic_string_view<Char>>& out_views,
         bool keep_empty,
-        bool strip_glue,
+        bool trim_glue,
         const std::basic_string_view<Char>& glue) noexcept
     {
-        CIX_UNVAR(out_length);
-        CIX_UNVAR(out_views);
-        CIX_UNVAR(keep_empty);
-        CIX_UNVAR(strip_glue);
-        CIX_UNVAR(glue);
+        CIX_UNUSED(out_length);
+        CIX_UNUSED(out_views);
+        CIX_UNUSED(keep_empty);
+        CIX_UNUSED(trim_glue);
+        CIX_UNUSED(glue);
     }
 
     template <
@@ -182,51 +202,51 @@ namespace detail
         std::size_t& out_length,
         std::vector<std::basic_string_view<Char>>& out_views,
         bool keep_empty,
-        bool strip_glue,
+        bool trim_glue,
         const std::basic_string_view<Char>& glue,
-        const String& next_,
+        const String& head_,
         Args&&... args) noexcept
     {
-        auto next = to_string_view(next_);
+        auto head = to_string_view(head_);
 
-        if (strip_glue && !glue.empty())
+        if (trim_glue && !glue.empty())
         {
-#if 0  // C++20 :(
-            while (next.starts_with(glue))
-                next.remove_prefix(glue.size());
+#if 1  // C++20
+            while (head.starts_with(glue))
+                head.remove_prefix(glue.size());
 
-            while (next.ends_with(glue))
-                next.remove_suffix(glue.size());
+            while (head.ends_with(glue))
+                head.remove_suffix(glue.size());
 #else
             const auto glue_size = glue.size();
 
             // strip prefix
             while (
-                next.size() >= glue_size &&
+                head.size() >= glue_size &&
                 std::equal(
-                    next.begin(),
-                    std::next(next.begin(), glue_size),
+                    head.begin(),
+                    std::next(head.begin(), glue_size),
                     glue.begin()))
             {
-                next.remove_prefix(glue_size);
+                head.remove_prefix(glue_size);
             }
 
             // strip suffix
             while (
-                next.size() >= glue_size &&
+                head.size() >= glue_size &&
                 std::equal(
                     // this instead of (end - glue_size), so that we stick to
                     // ForwardIt
-                    std::next(next.begin(), next.size() - glue_size),
-                    next.end(),
+                    std::next(head.begin(), head.size() - glue_size),
+                    head.end(),
                     glue.begin()))
             {
-                next.remove_suffix(glue_size);
+                head.remove_suffix(glue_size);
             }
 #endif
         }
 
-        if (keep_empty || !next.empty())
+        if (keep_empty || !head.empty())
         {
             if (!out_views.empty())
             {
@@ -234,11 +254,11 @@ namespace detail
                 out_length += glue.size();
             }
 
-            out_views.push_back(next);
-            out_length += next.size();
+            out_views.push_back(head);
+            out_length += head.size();
         }
 
-        join_stub(out_length, out_views, keep_empty, strip_glue, glue, args...);
+        join_stub(out_length, out_views, keep_empty, trim_glue, glue, args...);
     }
 
 }  // namespace detail
@@ -247,8 +267,7 @@ namespace detail
 template <typename Char>
 inline constexpr bool char_is(Char c, ctype_mask masks)
 {
-    const auto& facet = std::use_facet<std::ctype<Char>>(std::locale::classic());
-    return facet.is(masks, c);
+    return detail::cfacet<Char>.is(masks, c);
 }
 
 
@@ -259,56 +278,28 @@ inline constexpr bool isspace(Char c)
 }
 
 
-template <
-    typename Char,
-    typename std::enable_if_t<is_char_v<Char>, int>>
-inline size_type
-strnlen_s(const Char* s, size_type max_length)
+template <typename Char>
+inline constexpr size_type strnlen_s(const Char* s, size_type max_length)
 {
-    const std::basic_string_view<Char> view{s, max_length};
-    const size_type pos = view.find(Char(0));
-
-    if (pos == view.npos)
+    if (max_length <= 0 || !s)
     {
-        assert(0);
-        return max_length;
+        return 0;
     }
     else
     {
-        return pos;
+        const std::basic_string_view<Char> view(s, max_length);
+        const auto pos = view.find(Char(0));
+        return (pos != view.npos) ? pos : max_length;
     }
-}
-
-
-template <typename Char, size_type Count>
-inline std::basic_string_view<Char>
-to_string_view(const std::array<Char, Count>& s)
-{
-    return std::basic_string_view<Char>(
-        s.data(),
-        std::min(s.size(), std::char_traits<Char>::length(s.data())));
-}
-
-
-template <
-    typename Char,
-    typename Alloc,
-    typename std::enable_if_t<is_char_v<Char>, int>>
-inline std::basic_string_view<Char>
-to_string_view(
-    const std::vector<Char, Alloc>& s)
-{
-    return std::basic_string_view<Char>(
-        s.data(),
-        std::min(s.size(), std::char_traits<Char>::length(s.data())));
 }
 
 
 template <
     typename String,
-    typename Char,
-    typename std::enable_if_t<is_string_viewable_v<String>, int>>
-inline std::basic_string<Char>
+    typename Char>
+inline std::enable_if_t<
+    is_string_viewable_v<String>,
+    std::basic_string<Char>>
 to_string(const String& s)
 {
     const auto view = to_string_view(s);
@@ -317,7 +308,7 @@ to_string(const String& s)
 
 
 template <typename Container>
-typename Container::value_type*
+inline typename Container::value_type*
 prepare(
     Container& container,
     size_type required_len,
@@ -329,7 +320,7 @@ prepare(
 
 
 template <typename Container>
-Container&
+inline Container&
 finalize(
     Container& container,
     size_type length,
@@ -369,11 +360,11 @@ finalize(
 #ifdef _WIN32
 template <
     typename String,
-    typename Char,
-    typename std::enable_if_t<
-        is_string_viewable_v<String> &&
-        std::is_same_v<char, Char>, int>>
-inline std::wstring widen_utf8_lenient(const String& input)
+    typename Char>
+inline std::enable_if_t<
+    is_string_viewable_v<String> && std::is_same_v<char, Char>,
+    std::wstring>
+u8towrepl(const String& input)
 {
     const auto view = to_string_view(input);
     return detail::widen(view.data(), view.length(), false);
@@ -384,11 +375,11 @@ inline std::wstring widen_utf8_lenient(const String& input)
 #ifdef _WIN32
 template <
     typename String,
-    typename Char,
-    typename std::enable_if_t<
-        is_string_viewable_v<String> &&
-        std::is_same_v<char, Char>, int>>
-inline std::wstring widen_utf8_strict(const String& input)
+    typename Char>
+inline std::enable_if_t<
+    is_string_viewable_v<String> && std::is_same_v<char, Char>,
+    std::wstring>
+u8tow(const String& input)
 {
     const auto view = to_string_view(input);
     return detail::widen(view.data(), view.length(), true);
@@ -399,11 +390,11 @@ inline std::wstring widen_utf8_strict(const String& input)
 #ifdef _WIN32
 template <
     typename String,
-    typename Char,
-    typename std::enable_if_t<
-        is_string_viewable_v<String> &&
-        std::is_same_v<wchar_t, Char>, int>>
-inline std::string narrow_to_utf8_lenient(const String& input)
+    typename Char>
+inline std::enable_if_t<
+    is_string_viewable_v<String> && std::is_same_v<wchar_t, Char>,
+    std::string>
+wtou8repl(const String& input)
 {
     const auto view = to_string_view(input);
     return detail::narrow(view.data(), view.length(), false);
@@ -414,11 +405,11 @@ inline std::string narrow_to_utf8_lenient(const String& input)
 #ifdef _WIN32
 template <
     typename String,
-    typename Char,
-    typename std::enable_if_t<
-        is_string_viewable_v<String> &&
-        std::is_same_v<wchar_t, Char>, int>>
-inline std::string narrow_to_utf8_strict(const String& input)
+    typename Char>
+inline std::enable_if_t<
+    is_string_viewable_v<String> && std::is_same_v<wchar_t, Char>,
+    std::string>
+wtou8(const String& input)
 {
     const auto view = to_string_view(input);
     return detail::narrow(view.data(), view.length(), true);
@@ -429,13 +420,13 @@ inline std::string narrow_to_utf8_strict(const String& input)
 template <
     typename StringA,
     typename StringB,
-    typename Char,
-    typename std::enable_if_t<
-        is_string_viewable_v<StringA> &&
-        is_string_viewable_v<StringB> &&
-        std::is_same_v<char_t<StringA>, char_t<StringB>>, int>>
-inline constexpr std::vector<std::basic_string_view<Char>>
-split_one_of(
+    typename Char>
+inline constexpr std::enable_if_t<
+    is_string_viewable_v<StringA> &&
+    is_string_viewable_v<StringB> &&
+    std::is_same_v<char_t<StringA>, char_t<StringB>>,
+    std::vector<std::basic_string_view<Char>>>
+split_any_of(
         const StringA& input,
         const StringB& seps,
         size_type max_split)
@@ -474,16 +465,16 @@ split_one_of(
 template <
     typename String,
     typename UnaryPredicate,
-    typename Char,
-    typename std::enable_if_t<is_string_viewable_v<String>, int>>
-inline constexpr std::vector<std::basic_string_view<Char>>
+    typename Char>
+inline constexpr std::enable_if_t<
+    is_string_viewable_v<String>,
+    std::vector<std::basic_string_view<Char>>>
 split_if(
     const String& input,
     UnaryPredicate pred,
     size_type max_split)
 {
     const auto inputv = to_string_view(input);
-    const auto sepsv = to_string_view(seps);
     std::vector<std::basic_string_view<Char>> out;
     auto base = inputv.begin();
     decltype(base) it;
@@ -509,14 +500,15 @@ split_if(
 
 template <
     typename String,
-    typename Char,
-    typename std::enable_if_t<is_string_viewable_v<String>, int>>
-inline std::vector<std::basic_string_view<Char>>
+    typename Char>
+inline std::enable_if_t<
+    is_string_viewable_v<String>,
+    std::vector<std::basic_string_view<Char>>>
 split(
     const String& input,
     size_type max_split)
 {
-    auto pred = [](Char c) { return isspace(c); }
+    auto pred = [](Char c) { return isspace(c); };
     return split_if(input, pred, max_split);
 }
 
@@ -533,17 +525,17 @@ inline std::enable_if_t<
     std::basic_string<Char>>
 join(
     const StringA& glue_,
-    const StringB& next,
+    const StringB& head,
     Args&&... args) noexcept
 {
     std::vector<std::basic_string_view<Char>> glued_views;
     std::size_t final_strlen = 0;
     const auto glue = to_string_view(glue_);
 
-    glued_views.reserve(2 * (1 + sizeof...(args)));  // +1 for glue and next
+    glued_views.reserve(2 * (1 + sizeof...(args)));  // +1 for glue and head
 
     detail::join_stub(
-        final_strlen, glued_views, true, false, glue, next, args...);
+        final_strlen, glued_views, true, false, glue, head, args...);
 
     return detail::join_stub_final(final_strlen, glued_views);
 }
@@ -590,18 +582,18 @@ inline std::enable_if_t<
         std::is_same_v<char_t<StringA>, char_t<StringB>>,
     std::basic_string<Char>>
 melt(
-    const StringA& glue_,
-    const StringB& next,
+    const StringA& glue,
+    const StringB& head,
     Args&&... args) noexcept
 {
     std::vector<std::basic_string_view<Char>> glued_views;
     std::size_t final_strlen = 0;
-    const auto glue = to_string_view(glue_);
+    const auto glue_view = to_string_view(glue);
 
-    glued_views.reserve(2 * (1 + sizeof...(args)));  // +1 for glue and next
+    glued_views.reserve(2 * (1 + sizeof...(args)));  // +1 for glue_view and head
 
     detail::join_stub(
-        final_strlen, glued_views, false, false, glue, next, args...);
+        final_strlen, glued_views, false, false, glue_view, head, args...);
 
     return detail::join_stub_final(final_strlen, glued_views);
 }
@@ -618,7 +610,7 @@ inline std::enable_if_t<
         std::is_same_v<CharA, CharB>,
     std::basic_string<CharA>>
 melt(
-    const String& glue_,
+    const String& glue,
     const Container& elements) noexcept
 {
     if (elements.empty())
@@ -626,12 +618,13 @@ melt(
 
     std::vector<std::basic_string_view<CharA>> glued_views;
     std::size_t final_strlen = 0;
-    const auto glue = to_string_view(glue_);
+    const auto glue_view = to_string_view(glue);
 
     glued_views.reserve(2 * elements.size());
 
     for (const auto& elem : elements)
-        detail::join_stub(final_strlen, glued_views, false, false, glue, elem);
+        detail::join_stub(
+            final_strlen, glued_views, false, false, glue_view, elem);
 
     return detail::join_stub_final(final_strlen, glued_views);
 }
@@ -647,19 +640,19 @@ inline std::enable_if_t<
         is_string_viewable_v<StringB> &&
         std::is_same_v<char_t<StringA>, char_t<StringB>>,
     std::basic_string<Char>>
-melt_stripped(
-    const StringA& glue_,
-    const StringB& next,
+melt_trimmed(
+    const StringA& glue,
+    const StringB& head,
     Args&&... args) noexcept
 {
     std::vector<std::basic_string_view<Char>> glued_views;
     std::size_t final_strlen = 0;
-    const auto glue = to_string_view(glue_);
+    const auto glue_view = to_string_view(glue);
 
-    glued_views.reserve(2 * (1 + sizeof...(args)));  // +1 for glue and next
+    glued_views.reserve(2 * (1 + sizeof...(args)));  // +1 for glue_view and head
 
     detail::join_stub(
-        final_strlen, glued_views, false, true, glue, next, args...);
+        final_strlen, glued_views, false, true, glue_view, head, args...);
 
     return detail::join_stub_final(final_strlen, glued_views);
 }
@@ -675,8 +668,8 @@ inline std::enable_if_t<
         is_container_of_strings_v<Container> &&
         std::is_same_v<CharA, CharB>,
     std::basic_string<CharA>>
-melt_stripped(
-    const String& glue_,
+melt_trimmed(
+    const String& glue,
     const Container& elements) noexcept
 {
     if (elements.empty())
@@ -684,12 +677,13 @@ melt_stripped(
 
     std::vector<std::basic_string_view<CharA>> glued_views;
     std::size_t final_strlen = 0;
-    const auto glue = to_string_view(glue_);
+    const auto glue_view = to_string_view(glue);
 
     glued_views.reserve(2 * elements.size());
 
     for (const auto& elem : elements)
-        detail::join_stub(final_strlen, glued_views, false, true, glue, elem);
+        detail::join_stub(
+            final_strlen, glued_views, false, true, glue_view, elem);
 
     return detail::join_stub_final(final_strlen, glued_views);
 }
@@ -698,9 +692,10 @@ melt_stripped(
 template <
     typename String,
     typename UnaryPredicate,
-    typename Char,
-    typename std::enable_if_t<is_string_viewable_v<String>, int>>
-inline constexpr std::basic_string_view<Char>
+    typename Char>
+inline constexpr std::enable_if_t<
+    is_string_viewable_v<String>,
+    std::basic_string_view<Char>>
 ltrim_if(
     const String& input,
     UnaryPredicate to_remove)
@@ -718,9 +713,10 @@ ltrim_if(
 template <
     typename String,
     typename UnaryPredicate,
-    typename Char,
-    typename std::enable_if_t<is_string_viewable_v<String>, int>>
-inline constexpr std::basic_string_view<Char>
+    typename Char>
+inline constexpr std::enable_if_t<
+    is_string_viewable_v<String>,
+    std::basic_string_view<Char>>
 rtrim_if(
     const String& input,
     UnaryPredicate to_remove)
@@ -739,9 +735,10 @@ rtrim_if(
 template <
     typename String,
     typename UnaryPredicate,
-    typename Char,
-    typename std::enable_if_t<is_string_viewable_v<String>, int>>
-inline constexpr std::basic_string_view<Char>
+    typename Char>
+inline constexpr std::enable_if_t<
+    is_string_viewable_v<String>,
+    std::basic_string_view<Char>>
 trim_if(
     const String& input,
     UnaryPredicate to_remove)
@@ -755,14 +752,14 @@ template <
     typename StringA,
     typename StringB,
     typename StringC,
-    typename Char,
-    typename std::enable_if_t<
+    typename Char>
+inline std::enable_if_t<
         is_string_viewable_v<StringA> &&
         is_string_viewable_v<StringB> &&
         is_string_viewable_v<StringC> &&
         std::is_same_v<char_t<StringA>, char_t<StringB>> &&
-        std::is_same_v<char_t<StringA>, char_t<StringC>>, int>>
-std::basic_string<Char>
+        std::is_same_v<char_t<StringA>, char_t<StringC>>,
+    std::basic_string<Char>>
 replace_all(
     const StringA& input_,
     const StringB& from_,
@@ -779,12 +776,12 @@ replace_all(
 
     out.reserve(input.size());
 
-    decltype(input)::size_type start = 0;
+    typename decltype(input)::size_type start = 0;
     auto out_it = std::back_inserter(out);
 
     do
     {
-        auto pos = input.find(from.data(), start, from.size());
+        const auto pos = input.find(from.data(), start, from.size());
 
         if (pos != start)
         {
@@ -793,16 +790,16 @@ replace_all(
                 std::next(input.begin(), pos);
 
             std::copy(std::next(input.begin(), start), pos_it, out_it);
+
+            if (pos == input.npos)
+                break;
         }
 
         std::copy(to.begin(), to.end(), out_it);
 
-        if (pos == input.npos)
-            break;
-
         start = pos + from.size();
     }
-    while (start <= input.size());
+    while (start < input.size());
 
     return out;
 }
@@ -812,14 +809,14 @@ template <
     typename StringA,
     typename StringB,
     typename StringC,
-    typename Char,
-    typename std::enable_if_t<
+    typename Char>
+inline std::enable_if_t<
         is_string_viewable_v<StringA> &&
         is_string_viewable_v<StringB> &&
         is_string_viewable_v<StringC> &&
         std::is_same_v<char_t<StringA>, char_t<StringB>> &&
-        std::is_same_v<char_t<StringA>, char_t<StringC>>, int>>
-std::basic_string<Char>
+        std::is_same_v<char_t<StringA>, char_t<StringC>>,
+    std::basic_string<Char>>
 replace_all_of(
     const StringA& input_,
     const StringB& from_any_,
@@ -836,12 +833,12 @@ replace_all_of(
 
     out.reserve(input.size());
 
-    decltype(input)::size_type start = 0;
+    typename decltype(input)::size_type start = 0;
     auto out_it = std::back_inserter(out);
 
     do
     {
-        auto pos = input.find_first_of(from_any, start);
+        const auto pos = input.find_first_of(from_any, start);
 
         if (pos != start)
         {
@@ -850,16 +847,16 @@ replace_all_of(
                 std::next(input.begin(), pos);
 
             std::copy(std::next(input.begin(), start), pos_it, out_it);
+
+            if (pos == input.npos)
+                break;
         }
 
         std::copy(to.begin(), to.end(), out_it);
 
-        if (pos == input.npos)
-            break;
-
         start = pos + 1;
     }
-    while (start <= input.size());
+    while (start < input.size());
 
     return out;
 }
@@ -874,35 +871,28 @@ inline Container
 fmt(const String& format, Args&&... args)
 {
     typedef std::back_insert_iterator<Container> OutputIt;
-    typedef ::fmt::basic_format_context<OutputIt, Char> FmtContext;
 
     Container dest;
 
-    vfmt_to<String, Char, OutputIt, FmtContext>(
+    vfmt_to<String, Char, OutputIt>(
         std::back_inserter(dest),
         format,
-        ::fmt::make_format_args<FmtContext>(args...));
+        ::fmt::make_format_args<
+            ::fmt::buffer_context<::fmt::type_identity_t<Char>>>(args...));
 
     return dest;
 }
 
 
 template <
-    typename Container,
     typename String,
     typename... Args,
-    typename Char>
-inline std::back_insert_iterator<Container>
-fmt_to(
-    Container& dest, const String& format, Args&&... args)
+    typename Char,
+    typename Container>
+inline Container
+fmt_size(const String& format, Args&&... args)
 {
-    typedef std::back_insert_iterator<Container> OutputIt;
-    typedef ::fmt::basic_format_context<OutputIt, Char> FmtContext;
-
-    return vfmt_to<String, Char, OutputIt, FmtContext>(
-        std::back_inserter(dest),
-        format,
-        ::fmt::make_format_args<FmtContext>(args...));
+    return ::fmt::formatted_size(format, std::forward<Args>(args)...);
 }
 
 
@@ -912,16 +902,76 @@ template <
     typename... Args,
     typename Char>
 inline std::back_insert_iterator<Container>
+fmt_to(Container& dest, const String& format, Args&&... args)
+{
+    typedef std::back_insert_iterator<Container> OutputIt;
+
+    return vfmt_to<String, Char, OutputIt>(
+        std::back_inserter(dest),
+        format,
+        ::fmt::make_format_args<
+            ::fmt::buffer_context<::fmt::type_identity_t<Char>>>(args...));
+}
+
+
+template <
+    typename String,
+    typename... Args,
+    typename Char,
+    typename OutputIt>
+inline OutputIt
 fmt_to(
-    std::back_insert_iterator<Container> out,
+    OutputIt out,
     const String& format,
     Args&&... args)
 {
-    typedef std::back_insert_iterator<Container> OutputIt;
-    typedef ::fmt::basic_format_context<OutputIt, Char> FmtContext;
+    return vfmt_to<String, Char, OutputIt>(
+        out,
+        format,
+        ::fmt::make_format_args<
+            ::fmt::buffer_context<::fmt::type_identity_t<Char>>>(args...));
+}
 
-    return vfmt_to<String, Char, OutputIt, FmtContext>(
-        out, format, ::fmt::make_format_args<FmtContext>(args...));
+
+template <
+    typename Container,
+    typename String,
+    typename... Args,
+    typename Char>
+inline std::back_insert_iterator<Container>
+fmt_to_n(
+    Container& dest, std::size_t n, const String& format, Args&&... args)
+{
+    typedef std::back_insert_iterator<Container> OutputIt;
+
+    return vfmt_to_n<String, Char, OutputIt>(
+        std::back_inserter(dest),
+        n,
+        format,
+        ::fmt::make_format_args<
+            ::fmt::buffer_context<::fmt::type_identity_t<Char>>>(args...));
+}
+
+
+template <
+    typename Container,
+    typename String,
+    typename... Args,
+    typename Char,
+    typename OutputIt>
+inline OutputIt
+fmt_to_n(
+    OutputIt out,
+    std::size_t n,
+    const String& format,
+    Args&&... args)
+{
+    return vfmt_to_n<String, Char, OutputIt>(
+        out,
+        n,
+        format,
+        ::fmt::make_format_args<
+            ::fmt::buffer_context<::fmt::type_identity_t<Char>>>(args...));
 }
 
 
@@ -929,18 +979,30 @@ template <
     typename String,
     typename Char,
     typename OutputIt,
-    typename FmtContext>
+    typename FmtArgs>
 inline OutputIt
 vfmt_to(
     OutputIt out,
     const String& format,
-    ::fmt::basic_format_args<FmtContext> args)
+    FmtArgs args)
 {
-    typedef ::fmt::internal::output_range<OutputIt, Char> Range;
+    return ::fmt::vformat_to<OutputIt, String>(out, format, args);
+}
 
-    return ::fmt::vformat_to<
-        detail::fmt_custom_arg_formatter<Range>, Char, FmtContext>(
-            Range(out), format, args);  // ::fmt::to_string_view(format)
+
+template <
+    typename String,
+    typename Char,
+    typename OutputIt,
+    typename FmtArgs>
+inline OutputIt
+vfmt_to_n(
+    OutputIt out,
+    std::size_t n,
+    const String& format,
+    FmtArgs args)
+{
+    return ::fmt::vformat_to_n<OutputIt, Char>(out, n, format, args).out;
 }
 
 
@@ -948,7 +1010,7 @@ template <typename Char>
 inline std::enable_if_t<is_char_v<Char>, Char>
 to_lower(Char c)
 {
-    return std::use_facet<std::ctype<Char>>(std::locale::classic()).tolower(c);
+    return detail::cfacet<Char>.tolower(c);
 }
 
 
@@ -956,12 +1018,12 @@ template <typename Char>
 inline std::enable_if_t<is_char_v<Char>, Char>
 to_upper(Char c)
 {
-    return std::use_facet<std::ctype<Char>>(std::locale::classic()).toupper(c);
+    return detail::cfacet<Char>.toupper(c);
 }
 
 
 template <typename String, typename Char>
-std::enable_if_t<
+inline std::enable_if_t<
     is_string_viewable_v<String>,
     std::basic_string<Char>>
 to_lower(const String& input_)
@@ -972,16 +1034,14 @@ to_lower(const String& input_)
 
     std::basic_string<Char> output(input.begin(), input.end());
 
-    std::use_facet<std::ctype<Char>>(std::locale::classic()).tolower(
-        &output.front(),
-        &output.back() + 1);
+    detail::cfacet<Char>.tolower(&output.front(), &output.back() + 1);
 
     return output;
 }
 
 
 template <typename String, typename Char>
-std::enable_if_t<
+inline std::enable_if_t<
     is_string_viewable_v<String>,
     std::basic_string<Char>>
 to_upper(const String& input_)
@@ -992,9 +1052,7 @@ to_upper(const String& input_)
 
     std::basic_string<Char> output(input.begin(), input.end());
 
-    std::use_facet<std::ctype<Char>>(std::locale::classic()).toupper(
-        &output.front(),
-        &output.back() + 1);
+    detail::cfacet<Char>.toupper(&output.front(), &output.back() + 1);
 
     return output;
 }

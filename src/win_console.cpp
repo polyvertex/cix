@@ -5,7 +5,7 @@
 #include <cix/cix>
 #include <cix/detail/intro.h>
 
-#if CIX_PLATFORM == CIX_PLATFORM_WINDOWS
+#if CIX_PLATFORM_WINDOWS
 
 namespace cix {
 namespace wincon {
@@ -185,7 +185,7 @@ bool init(init_flags_t flags, std::int16_t min_lines)
         {
 #ifdef _DEBUG
             const auto error = GetLastError();
-            CIX_UNVAR(error);
+            CIX_UNUSED(error);
 #endif
             assert(0);
             return false;
@@ -249,11 +249,11 @@ bool write(FILE* stream, const std::wstring& msg, style_t style)
     //     stream = stderr;
     // }
 
+    // do not try to apply style if output is not a tty
     if (style != style_unset)
     {
         const int fd = _fileno(stream);
 
-        // do not try to apply attributes if output is not a tty
         if (fd != -1 && _isatty(fd))
         {
             handle = reinterpret_cast<HANDLE>(_get_osfhandle(fd));
@@ -269,12 +269,14 @@ bool write(FILE* stream, const std::wstring& msg, style_t style)
             style = style_unset;
     }
 
+    // apply style
     if (style != style_unset &&
         !SetConsoleTextAttribute(handle, detail::style_to_attributes(style)))
     {
         style = style_unset;
     }
 
+    // write message
     fputws(msg.c_str(), stream);
 
     // restore previous style
@@ -342,4 +344,4 @@ void release()
 }  // namespace wincon
 }  // namespace cix
 
-#endif  // #if CIX_PLATFORM == CIX_PLATFORM_WINDOWS
+#endif  // #if CIX_PLATFORM_WINDOWS

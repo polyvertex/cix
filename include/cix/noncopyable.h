@@ -12,7 +12,9 @@ struct noncopyable
 {
     noncopyable() = default;
     noncopyable(const noncopyable&) = delete;
+    noncopyable(noncopyable&&) = delete;
     noncopyable& operator=(const noncopyable&) = delete;
+    noncopyable& operator=(noncopyable&&) = delete;
 };
 
 }  // namespace cix

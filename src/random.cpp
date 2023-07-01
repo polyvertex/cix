@@ -13,7 +13,7 @@ namespace detail
     // return the number of microseconds elapsed since 1601-01-01 UTC
     static std::uint64_t now_microseconds() noexcept
     {
-        #if CIX_PLATFORM == CIX_PLATFORM_WINDOWS
+        #if CIX_PLATFORM_WINDOWS
             FILETIME ft;
             ULARGE_INTEGER uli;
 
@@ -42,7 +42,7 @@ namespace detail
 
     static std::uint64_t cputime() noexcept
     {
-        #if CIX_PLATFORM == CIX_PLATFORM_WINDOWS
+        #if CIX_PLATFORM_WINDOWS
             LARGE_INTEGER li;
             QueryPerformanceCounter(&li);
             return static_cast<std::uint64_t>(li.QuadPart);

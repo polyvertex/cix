@@ -27,7 +27,19 @@
 // unused variable / argument
 #ifdef UNREFERENCED_PARAMETER
     // UNREFERENCED_PARAMETER, as defined in <winnt.h>
-    #define CIX_UNVAR     UNREFERENCED_PARAMETER
+    #define CIX_UNUSED     UNREFERENCED_PARAMETER
 #else
-    #define CIX_UNVAR(x)  (x)
+    #define CIX_UNUSED(x)  (x)
 #endif
+
+
+// non-copyable class
+#define CIX_NONCOPYABLE(klass) \
+    klass(const klass&) = delete; \
+    klass& operator=(const klass&) = delete;
+
+
+// non-movable class
+#define CIX_NONMOVABLE(klass) \
+    klass(klass&&) = delete; \
+    klass& operator=(klass&&) = delete;

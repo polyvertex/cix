@@ -11,7 +11,7 @@
 namespace cix {
 
 template <typename T = HLOCAL>
-struct local_dter
+struct localmem_dter
 {
     void operator()(T* ptr) const
     {
@@ -21,11 +21,11 @@ struct local_dter
 };
 
 template <typename T>
-using unique_local = std::unique_ptr<T, local_dter<T>>;
+using unique_localmem = std::unique_ptr<T, localmem_dter<T>>;
 
 
 template <typename T = HGLOBAL>
-struct global_dter
+struct globalmem_dter
 {
     void operator()(T* ptr) const
     {
@@ -35,7 +35,7 @@ struct global_dter
 };
 
 template <typename T>
-using unique_global = std::unique_ptr<T, global_dter<T>>;
+using unique_globalmem = std::unique_ptr<T, globalmem_dter<T>>;
 
 
 template <typename T = void>

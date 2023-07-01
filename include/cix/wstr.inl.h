@@ -477,10 +477,10 @@ inline wstr wstr::path_strip_ext(bool remove_all_extensions) const
 { return wstr(*this).path_replace_ext(remove_all_extensions, wstr()); }
 
 inline wstr& wstr::path_win()
-{ return this->replace_all(WSTR("/"), WSTR("\\")); }
+{ return this->replace_all(CIX_WSTR("/"), CIX_WSTR("\\")); }
 
 inline wstr& wstr::path_unix()
-{ return this->replace_all(WSTR("\\"), WSTR("/")); }
+{ return this->replace_all(CIX_WSTR("\\"), CIX_WSTR("/")); }
 
 inline wstr& wstr::path_native()
 {
@@ -676,7 +676,7 @@ inline bool wstr::is_pathsep_win(value_type c)
 { return c == value_type('\\'); }
 
 inline wstr::const_pointer wstr::path_separators()
-{ static const_pointer c_sep = WSTR("/\\"); return c_sep; }
+{ static const_pointer c_sep = CIX_WSTR("/\\"); return c_sep; }
 
 inline wstr::value_type wstr::native_path_separator()
 {
@@ -688,7 +688,7 @@ inline wstr::value_type wstr::native_path_separator()
 }
 
 inline wstr::const_pointer wstr::wildcards()
-{ static const_pointer c_wildcards = WSTR("*?"); return c_wildcards; }
+{ static const_pointer c_wildcards = CIX_WSTR("*?"); return c_wildcards; }
 
 inline wstr::value_type wstr::replacement_char()
 { return 0xFFFD; }

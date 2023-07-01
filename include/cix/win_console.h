@@ -6,7 +6,7 @@
 
 #include "detail/ensure_cix.h"
 
-#if CIX_PLATFORM == CIX_PLATFORM_WINDOWS
+#if CIX_PLATFORM_WINDOWS
 
 namespace cix {
 namespace wincon {
@@ -82,4 +82,4 @@ void release();
 }  // namespace wincon
 }  // namespace cix
 
-#endif  // #if CIX_PLATFORM == CIX_PLATFORM_WINDOWS
+#endif  // #if CIX_PLATFORM_WINDOWS

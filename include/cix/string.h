@@ -6,6 +6,10 @@
 
 #include "detail/ensure_cix.h"
 
+#define CIX_WSTR(x)    __CIX_WSTR(x)
+#define __CIX_WSTR(x)  L##x
+
+
 namespace cix {
 namespace string {
 
@@ -31,84 +35,97 @@ static constexpr auto ctype_graph = std::ctype_base::graph;
 
 // char_is
 template <typename Char> constexpr bool char_is(Char c, ctype_mask masks);
+
+// isspace - shorthand for ``char_is(c, ctype_space)``
 template <typename Char> constexpr bool isspace(Char c);
+
+
 
 // is_char
 template <typename Char> struct is_char : std::false_type { };
 template <> struct is_char<char> : std::true_type { };
-// template <> struct is_char<signed char> : std::true_type { };  // enables std::int8_t; not what we want
-// template <> struct is_char<unsigned char> : std::true_type { };
 template <> struct is_char<wchar_t> : std::true_type { };
+template <> struct is_char<char8_t> : std::true_type { };
 template <> struct is_char<char16_t> : std::true_type { };
 template <> struct is_char<char32_t> : std::true_type { };
 
 // is_char_v
 template <typename Char>
-inline constexpr bool is_char_v = typename is_char<Char>::value;
+inline constexpr bool is_char_v = is_char<Char>::value;
+
+
 
 // strnlen_s
-template <
-    typename Char,
-    typename std::enable_if_t<is_char_v<Char>, int> = 0>
-size_type
-strnlen_s(const Char* s, size_type max_length);
 
+template <typename Char>
+constexpr size_type strnlen_s(const Char* s, size_type max_length);
+
+// template <>
+// inline constexpr size_type strnlen_s<char>(const char* s, size_type max_length)
+// { return ::strnlen_s(s, max_length); }  // SIMD-optimized (MSVC at least)
+
+// template <>
+// inline constexpr size_type strnlen_s<wchar_t>(const wchar_t* s, size_type max_length)
+// { return ::wcsnlen_s(s, max_length); }  // SIMD-optimized (MSVC at least)
+
+template <typename Char, size_type Count>
+inline constexpr size_type strnlen_s(const std::array<Char, Count>& s)
+{ return strnlen_s(s.data(), s.size()); }
+
+template <typename Char>
+inline constexpr size_type strnlen_s(const std::basic_string_view<Char>& s)
+{ return strnlen_s(s.data(), s.size()); }
+
+template <typename Char>
+inline constexpr size_type strnlen_s(const std::vector<Char>& s)
+{ return strnlen_s(s.data(), s.size()); }
 
 
 // to_string_view
 
-template <
-    typename Char,
-    typename std::enable_if_t<is_char_v<Char>, int> = 0>
-inline constexpr std::basic_string_view<Char>
+template <typename Char>
+inline constexpr std::enable_if_t<
+    is_char_v<Char>,
+    std::basic_string_view<Char>>
 to_string_view(const Char* s)
 { return s; }
 
-template <
-    typename Char,
-    typename std::enable_if_t<is_char_v<Char>, int> = 0>
-inline constexpr std::basic_string_view<Char>
-to_string_view(const Char* s, std::size_t length)
-{ return {s, length}; }
+template <typename Char>
+inline constexpr std::enable_if_t<
+    is_char_v<Char>,
+    std::basic_string_view<Char>>
+to_string_view(const Char* s, size_type length)
+{ return { s, length }; }
 
 template <typename Char>
-inline std::basic_string_view<Char>
+inline constexpr std::basic_string_view<Char>
 to_string_view(std::basic_string_view<Char> s)
 { return s; }
 
-template <typename Char, typename Traits, typename Alloc>
-inline std::basic_string_view<Char>
-to_string_view(const std::basic_string<Char, Traits, Alloc>& s)
-{ return s; }
+template <typename Char, size_type Count>
+inline constexpr std::basic_string_view<Char>
+to_string_view(const std::array<Char, Count>& s)
+{ return { s.data(), strnlen_s(s) }; }
 
-template <typename Char, std::size_t Count>
-std::basic_string_view<Char>
-to_string_view(const std::array<Char, Count>& s);
+template <typename Char, typename Traits, typename Alloc>
+inline constexpr std::basic_string_view<Char>
+to_string_view(const std::basic_string<Char, Traits, Alloc>& s)
+{ return { s.data(), s.size() }; }
 
 template <
     typename Char,
-    typename Alloc,
-    typename std::enable_if_t<is_char_v<Char>, int> = 0>
-std::basic_string_view<Char>
-to_string_view(const std::vector<Char, Alloc>& s);
+    typename Alloc>
+inline constexpr std::enable_if_t<
+    is_char_v<Char>,
+    std::basic_string_view<Char>>
+to_string_view(const std::vector<Char, Alloc>& s)
+{ return { s.data(), strnlen_s(s) }; }
 
 #ifdef CPPWINRT_VERSION  // C++/WinRT enabled
 inline std::basic_string_view<winrt::hstring::value_type>
 to_string_view(const winrt::hstring& s)
-{ return s; }
+{ return { s.data(), s.size() }; }
 #endif
-
-
-
-// is_string_viewable [OLD]
-//
-// template <typename String>
-// struct is_string_viewable :
-//     std::is_class<decltype(to_string_view(std::declval<String>()))>
-//     { };
-// template <typename String>
-// inline constexpr bool is_string_viewable_v =
-//     typename is_string_viewable<String>::value;
 
 
 
@@ -130,7 +147,7 @@ struct is_string_viewable<
 
 template <typename String>
 inline constexpr bool is_string_viewable_v =
-    typename is_string_viewable<String>::value;
+    is_string_viewable<String>::value;
 
 
 
@@ -176,23 +193,24 @@ struct is_container_of_strings<
 
 template <typename Container>
 inline constexpr bool is_container_of_strings_v =
-    typename is_container_of_strings<Container>::value;
+    is_container_of_strings<Container>::value;
 
 
 
 // to_string
 template <
     typename String,
-    typename Char = char_t<String>,
-    typename std::enable_if_t<is_string_viewable_v<String>, int> = 0>
-std::basic_string<Char>
+    typename Char = char_t<String>>
+std::enable_if_t<
+    is_string_viewable_v<String>,
+    std::basic_string<Char>>
 to_string(const String& s);
 
 
 
 /**
     /rst
-    Safely exposes the internal buffer of a standard'ish container object like
+    Safely expose the internal buffer of a standard'ish container object like
     ``std::vector`` or ``std::basic_string``, to an external API.
 
     .. note::
@@ -210,7 +228,7 @@ prepare(
 
 /**
     /rst
-    Counterpart of :func:`prepare`. Cleans up the internal buffer of a
+    Counterpart of :func:`prepare`. Clean up the internal buffer of a
     standard'ish container object after
 
     If *length* equals to ``cix::string::npos``, this function will search for a
@@ -228,59 +246,58 @@ finalize(
     size_type offset=0);
 
 
-// widen
+// widen (utf-8 to wchar_t)
 #ifdef _WIN32
 template <
     typename String,
-    typename Char = char_t<String>,
-    typename std::enable_if_t<
-        is_string_viewable_v<String> &&
-        std::is_same_v<char, Char>, int> = 0>
-std::wstring widen_utf8_lenient(const String& input);
+    typename Char = char_t<String>>
+std::enable_if_t<
+    is_string_viewable_v<String> && std::is_same_v<char, Char>,
+    std::wstring>
+u8towrepl(const String& input);
 
 template <
     typename String,
-    typename Char = char_t<String>,
-    typename std::enable_if_t<
-        is_string_viewable_v<String> &&
-        std::is_same_v<char, Char>, int> = 0>
-std::wstring widen_utf8_strict(const String& input);
+    typename Char = char_t<String>>
+std::enable_if_t<
+    is_string_viewable_v<String> && std::is_same_v<char, Char>,
+    std::wstring>
+u8tow(const String& input);
 #endif
 
 
-// narrow
-// CAUTION: narrow_to_utf8_strict behaves like the "lenient" variant on
-// pre-Vista platforms
+// narrow (wchar_t to utf-8)
+// CAUTION: wtou8() behaves like wtou8repl() on pre-Vista platforms
 #ifdef _WIN32
 template <
     typename String,
-    typename Char = char_t<String>,
-    typename std::enable_if_t<
-        is_string_viewable_v<String> &&
-        std::is_same_v<wchar_t, Char>, int> = 0>
-std::string narrow_to_utf8_lenient(const String& input);
+    typename Char = char_t<String>>
+std::enable_if_t<
+    is_string_viewable_v<String> && std::is_same_v<wchar_t, Char>,
+    std::string>
+wtou8repl(const String& input);
 
 template <
     typename String,
-    typename Char = char_t<String>,
-    typename std::enable_if_t<
-        is_string_viewable_v<String> &&
-        std::is_same_v<wchar_t, Char>, int> = 0>
-std::string narrow_to_utf8_strict(const String& input);
+    typename Char = char_t<String>>
+std::enable_if_t<
+    is_string_viewable_v<String> && std::is_same_v<wchar_t, Char>,
+    std::string>
+wtou8(const String& input);
 #endif
 
 
-// split_one_of
+// split_any_of
 template <
     typename StringA,
     typename StringB,
-    typename Char = char_t<StringA>,
-    typename std::enable_if_t<
-        is_string_viewable_v<StringA> &&
-        is_string_viewable_v<StringB> &&
-        std::is_same_v<char_t<StringA>, char_t<StringB>>, int> = 0>
-constexpr std::vector<std::basic_string_view<Char>>
-split_one_of(
+    typename Char = char_t<StringA>>
+constexpr std::enable_if_t<
+    is_string_viewable_v<StringA> &&
+    is_string_viewable_v<StringB> &&
+    std::is_same_v<char_t<StringA>, char_t<StringB>>,
+    std::vector<std::basic_string_view<Char>>>
+split_any_of(
     const StringA& input,
     const StringB& seps,
     size_type max_split=0);
@@ -289,9 +306,10 @@ split_one_of(
 template <
     typename String,
     typename UnaryPredicate,
-    typename Char = char_t<String>,
-    typename std::enable_if_t<is_string_viewable_v<String>, int> = 0>
-constexpr std::vector<std::basic_string_view<Char>>
+    typename Char = char_t<String>>
+constexpr std::enable_if_t<
+    is_string_viewable_v<String>,
+    std::vector<std::basic_string_view<Char>>>
 split_if(
     const String& input,
     UnaryPredicate pred,
@@ -300,9 +318,10 @@ split_if(
 // split (split on whitespaces)
 template <
     typename String,
-    typename Char = char_t<String>,
-    typename std::enable_if_t<is_string_viewable_v<String>, int> = 0>
-std::vector<std::basic_string_view<Char>>
+    typename Char = char_t<String>>
+std::enable_if_t<
+    is_string_viewable_v<String>,
+    std::vector<std::basic_string_view<Char>>>
 split(
     const String& input,
     size_type max_split=0);
@@ -322,7 +341,7 @@ std::enable_if_t<
     std::basic_string<Char>>
 join(
     const StringA& glue,
-    const StringB& next,
+    const StringB& head,
     Args&&... args) noexcept;
 
 // join (from a container of strings)
@@ -355,8 +374,8 @@ std::enable_if_t<
         std::is_same_v<char_t<StringA>, char_t<StringB>>,
     std::basic_string<Char>>
 melt(
-    const StringA& glue_,
-    const StringB& next,
+    const StringA& glue,
+    const StringB& head,
     Args&&... args) noexcept;
 
 // melt (from a container of strings)
@@ -376,13 +395,13 @@ melt(
 
 
 
-// melt_stripped
+// melt_trimmed
 //
 // Like `cix::string::melt` except that glue is stripped from both ends of an
 // element before it gets appended.
 //
 // Typically useful to join parts of a path. See `cix::path::join` and
-// `cix::path::join_native`.
+// `cix::path::join_with`.
 template <
     typename StringA,
     typename StringB,
@@ -393,12 +412,12 @@ std::enable_if_t<
         is_string_viewable_v<StringB> &&
         std::is_same_v<char_t<StringA>, char_t<StringB>>,
     std::basic_string<Char>>
-melt_stripped(
-    const StringA& glue_,
-    const StringB& next,
+melt_trimmed(
+    const StringA& glue,
+    const StringB& head,
     Args&&... args) noexcept;
 
-// melt_stripped (from a container of strings)
+// melt_trimmed (from a container of strings)
 template <
     typename String,
     typename Container,
@@ -409,7 +428,7 @@ std::enable_if_t<
         is_container_of_strings_v<Container> &&
         std::is_same_v<CharA, CharB>,
     std::basic_string<CharA>>
-melt_stripped(
+melt_trimmed(
     const String& glue,
     const Container& elements) noexcept;
 
@@ -420,9 +439,10 @@ melt_stripped(
 template <
     typename String,
     typename UnaryPredicate,
-    typename Char = char_t<String>,
-    typename std::enable_if_t<is_string_viewable_v<String>, int> = 0>
-constexpr std::basic_string_view<Char>
+    typename Char = char_t<String>>
+constexpr std::enable_if_t<
+    is_string_viewable_v<String>,
+    std::basic_string_view<Char>>
 ltrim_if(
     const String& input,
     UnaryPredicate to_remove);
@@ -430,9 +450,10 @@ ltrim_if(
 template <
     typename String,
     typename UnaryPredicate,
-    typename Char = char_t<String>,
-    typename std::enable_if_t<is_string_viewable_v<String>, int> = 0>
-constexpr std::basic_string_view<Char>
+    typename Char = char_t<String>>
+constexpr std::enable_if_t<
+    is_string_viewable_v<String>,
+    std::basic_string_view<Char>>
 rtrim_if(
     const String& input,
     UnaryPredicate to_remove);
@@ -440,9 +461,10 @@ rtrim_if(
 template <
     typename String,
     typename UnaryPredicate,
-    typename Char = char_t<String>,
-    typename std::enable_if_t<is_string_viewable_v<String>, int> = 0>
-constexpr std::basic_string_view<Char>
+    typename Char = char_t<String>>
+constexpr std::enable_if_t<
+    is_string_viewable_v<String>,
+    std::basic_string_view<Char>>
 trim_if(
     const String& input,
     UnaryPredicate to_remove);
@@ -453,25 +475,28 @@ trim_if(
 
 template <
     typename String,
-    typename Char = char_t<String>,
-    typename std::enable_if_t<is_string_viewable_v<String>, int> = 0>
-constexpr std::basic_string_view<Char>
+    typename Char = char_t<String>>
+inline constexpr std::enable_if_t<
+    is_string_viewable_v<String>,
+    std::basic_string_view<Char>>
 ltrim(const String& input)
     { return ltrim_if(input, isspace<Char>); }
 
 template <
     typename String,
-    typename Char = char_t<String>,
-    typename std::enable_if_t<is_string_viewable_v<String>, int> = 0>
-constexpr std::basic_string_view<Char>
+    typename Char = char_t<String>>
+inline constexpr std::enable_if_t<
+    is_string_viewable_v<String>,
+    std::basic_string_view<Char>>
 rtrim(const String& input)
     { return rtrim_if(input, isspace<Char>); }
 
 template <
     typename String,
-    typename Char = char_t<String>,
-    typename std::enable_if_t<is_string_viewable_v<String>, int> = 0>
-constexpr std::basic_string_view<Char>
+    typename Char = char_t<String>>
+inline constexpr std::enable_if_t<
+    is_string_viewable_v<String>,
+    std::basic_string_view<Char>>
 trim(const String& input)
     { return trim_if(input, isspace<Char>); }
 
@@ -482,14 +507,14 @@ template <
     typename StringA,
     typename StringB,
     typename StringC,
-    typename Char = char_t<StringA>,
-    typename std::enable_if_t<
+    typename Char = char_t<StringA>>
+std::enable_if_t<
         is_string_viewable_v<StringA> &&
         is_string_viewable_v<StringB> &&
         is_string_viewable_v<StringC> &&
         std::is_same_v<char_t<StringA>, char_t<StringB>> &&
-        std::is_same_v<char_t<StringA>, char_t<StringC>>, int> = 0>
-std::basic_string<Char>
+        std::is_same_v<char_t<StringA>, char_t<StringC>>,
+    std::basic_string<Char>>
 replace_all(
     const StringA& input,
     const StringB& from,
@@ -501,14 +526,14 @@ template <
     typename StringA,
     typename StringB,
     typename StringC,
-    typename Char = char_t<StringA>,
-    typename std::enable_if_t<
+    typename Char = char_t<StringA>>
+std::enable_if_t<
         is_string_viewable_v<StringA> &&
         is_string_viewable_v<StringB> &&
         is_string_viewable_v<StringC> &&
         std::is_same_v<char_t<StringA>, char_t<StringB>> &&
-        std::is_same_v<char_t<StringA>, char_t<StringC>>, int> = 0>
-std::basic_string<Char>
+        std::is_same_v<char_t<StringA>, char_t<StringC>>,
+    std::basic_string<Char>>
 replace_all_of(
     const StringA& input,
     const StringB& from_any,
@@ -527,6 +552,18 @@ fmt(
     const String& format,
     Args&&... args);
 
+// fmt_size
+// returns the number of characters in the output of fmt(format, args...)
+template <
+    typename String,
+    typename... Args,
+    typename Char = ::fmt::char_t<String>,
+    typename Container = std::basic_string<Char>>
+Container
+fmt_size(
+    const String& format,
+    Args&&... args);
+
 // fmt_to (OutContainer)
 // append to dest
 template <
@@ -542,13 +579,41 @@ fmt_to(
 
 // fmt_to (OutIterator)
 template <
+    typename String,
+    typename... Args,
+    typename Char = ::fmt::char_t<String>,
+    typename OutputIt = std::back_insert_iterator<Char>>
+OutputIt
+fmt_to(
+    OutputIt out,
+    const String& format,
+    Args&&... args);
+
+// fmt_to_n (OutContainer)
+// append to dest, up to N characters
+template <
     typename Container,
     typename String,
     typename... Args,
     typename Char = ::fmt::char_t<String>>
 std::back_insert_iterator<Container>
-fmt_to(
-    std::back_insert_iterator<Container> out,
+fmt_to_n(
+    Container& dest,
+    std::size_t n,
+    const String& format,
+    Args&&... args);
+
+// fmt_to_n (OutIterator)
+template <
+    typename Container,
+    typename String,
+    typename... Args,
+    typename Char = ::fmt::char_t<String>,
+    typename OutputIt = std::back_insert_iterator<Container>>
+OutputIt
+fmt_to_n(
+    OutputIt out,
+    std::size_t n,
     const String& format,
     Args&&... args);
 
@@ -557,12 +622,26 @@ template <
     typename String,
     typename Char = ::fmt::char_t<String>,
     typename OutputIt = std::back_insert_iterator<std::basic_string<Char>>,
-    typename FmtContext = ::fmt::basic_format_context<OutputIt, Char>>
+    typename FmtArgs = ::fmt::basic_format_args<
+        ::fmt::buffer_context<::fmt::type_identity_t<Char>>>>
 OutputIt
 vfmt_to(
     OutputIt out,
     const String& format,
-    ::fmt::basic_format_args<FmtContext> args);
+    FmtArgs args);
+
+// vfmt_to_n
+template <
+    typename String,
+    typename Char = ::fmt::char_t<String>,
+    typename OutputIt = std::back_insert_iterator<std::basic_string<Char>>,
+    typename FmtArgs = ::fmt::basic_format_args<::fmt::buffer_context<Char>>>
+OutputIt
+vfmt_to_n(
+    OutputIt out,
+    std::size_t n,
+    const String& format,
+    FmtArgs args);
 
 
 
@@ -598,5 +677,6 @@ to_upper(const String& input);
 
 }  // namespace string
 }  // namespace cix
+
 
 #include "string.inl.h"

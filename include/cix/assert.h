@@ -11,7 +11,7 @@
 #ifndef CIX_DEBUG_BREAK
     #if defined(__clang__) || defined(__GNUC__)
         #define CIX_DEBUG_BREAK()  __builtin_trap()
-    #elif defined(_MSC_VER)
+    #elif defined(_MSC_VER) || defined(__INTEL_COMPILER)
         #define CIX_DEBUG_BREAK()  __debugbreak()
     // #else
     //     #error compiler not supported

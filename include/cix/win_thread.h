@@ -6,7 +6,7 @@
 
 #include "detail/ensure_cix.h"
 
-#if CIX_PLATFORM == CIX_PLATFORM_WINDOWS
+#if CIX_PLATFORM_WINDOWS
 
 namespace cix {
 
@@ -129,6 +129,7 @@ private:
 
 }  // namespace cix
 
+
 #include "win_thread.inl.h"
 
-#endif  // #if CIX_PLATFORM == CIX_PLATFORM_WINDOWS
+#endif  // #if CIX_PLATFORM_WINDOWS

@@ -5,11 +5,12 @@
 #pragma once
 
 
-// compilers enum
-#define CIX_COMPILER_CLANG  1
-#define CIX_COMPILER_GCC    2
-#define CIX_COMPILER_INTEL  3
-#define CIX_COMPILER_MSVC   4
+// known compilers
+// only one of those will be redefined to (1) by the detection logic below
+#define CIX_COMPILER_CLANG  0
+#define CIX_COMPILER_GCC    0
+#define CIX_COMPILER_INTEL  0
+#define CIX_COMPILER_MSVC   0
 
 
 // compiler detection
@@ -19,14 +20,16 @@
     #ifndef __GNUC_PATCHLEVEL__
         #define __GNUC_PATCHLEVEL__  0
     #endif
-    #define CIX_COMPILER          CIX_COMPILER_INTEL
+    #undef CIX_COMPILER_INTEL
+    #define CIX_COMPILER_INTEL    1
     #define CIX_COMPILER_NAME     "intel"
     #define CIX_COMPILER_VERSION  (__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__)  // MMmmPP
     #define CIX_FUNCTION          __func__
     #define CIX_FILE              __BASE_FILE__
     #define CIX_LINE              __LINE__
 #elif defined(__clang__)
-    #define CIX_COMPILER          CIX_COMPILER_CLANG
+    #undef CIX_COMPILER_CLANG
+    #define CIX_COMPILER_CLANG    1
     #define CIX_COMPILER_NAME     "clang"
     #define CIX_COMPILER_VERSION  (__clang_major__ * 10000 + __clang_minor__ * 100 + __clang_patchlevel__)  // MMmmPP
     #define CIX_FUNCTION          __func__
@@ -36,13 +39,15 @@
     #ifndef __GNUC_PATCHLEVEL__
         #define __GNUC_PATCHLEVEL__  0
     #endif
-    #define CIX_COMPILER          CIX_COMPILER_GCC
+    #undef CIX_COMPILER_GCC
+    #define CIX_COMPILER_GCC      1
     #define CIX_COMPILER_NAME     "gcc"
     #define CIX_COMPILER_VERSION  (__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__)  // MMmmPP
     #define CIX_FUNCTION          __func__  // __PRETTY_FUNCTION__
     #define CIX_FILE              __BASE_FILE__
     #define CIX_LINE              __LINE__
 #elif defined(_MSC_VER)
+    // * MSVC++ 17.0 _MSC_VER >= 1930 (Visual Studio 2022)
     // * MSVC++ 14.2 _MSC_VER >= 1920 (Visual Studio 2019)
     // * MSVC++ 14.1 _MSC_VER >= 1910 (Visual Studio 2017)
     // * MSVC++ 14.0 _MSC_VER == 1900 (Visual Studio 2015)
@@ -55,7 +60,8 @@
     // * MSVC++ 7.0  _MSC_VER == 1300
     // * MSVC++ 6.0  _MSC_VER == 1200
     // * MSVC++ 5.0  _MSC_VER == 1100
-    #define CIX_COMPILER          CIX_COMPILER_MSVC
+    #undef CIX_COMPILER_MSVC
+    #define CIX_COMPILER_MSVC     1
     #define CIX_COMPILER_NAME     "msvc"
     #define CIX_COMPILER_VERSION  _MSC_VER
     #define CIX_FUNCTION          __func__
@@ -67,154 +73,187 @@
 
 
 
-// platforms enum - linux group
-#define CIX_PLATFORM_LINUX    10
-#define CIX_PLATFORM_ANDROID  11
+// known platforms
+// one or multiple of those values will be redefined to (1) by the detection
+// logic below
 
-// platforms enum - bsg group
-#define CIX_PLATFORM_DRAGONFLY  21
-#define CIX_PLATFORM_FREEBSD    22
-#define CIX_PLATFORM_NETBSD     23
-#define CIX_PLATFORM_OPENBSD    24
+// unix common groups
+#define CIX_PLATFORM_UNIX   0
+#define CIX_PLATFORM_POSIX  0
+#define CIX_PLATFORM_LINUX  0
 
-// platforms enum - windows group
-#define CIX_PLATFORM_WINDOWS  30
-#define CIX_PLATFORM_CYGWIN   31
-#define CIX_PLATFORM_MINGW    32
+// linux distros group
+#define CIX_PLATFORM_ANDROID  0
 
-// platforms enum - apple group
-#define CIX_PLATFORM_MACOS          41
-#define CIX_PLATFORM_IOS            42
-#define CIX_PLATFORM_IOS_SIMULATOR  43
+// bsd group
+#define CIX_PLATFORM_DRAGONFLY  0
+#define CIX_PLATFORM_FREEBSD    0
+#define CIX_PLATFORM_NETBSD     0
+#define CIX_PLATFORM_OPENBSD    0
 
-// platforms enum - other unix-like group
-#define CIX_PLATFORM_HPUX     51
-#define CIX_PLATFORM_SOLARIS  52
-#define CIX_PLATFORM_AIX      53
+// windows group
+#define CIX_PLATFORM_WINDOWS  0
+#define CIX_PLATFORM_CYGWIN   0
+#define CIX_PLATFORM_MINGW    0
+
+// apple group
+#define CIX_PLATFORM_MACOS          0
+#define CIX_PLATFORM_IOS            0
+#define CIX_PLATFORM_IOS_SIMULATOR  0
+
+// other unix-like group
+#define CIX_PLATFORM_HPUX     0
+#define CIX_PLATFORM_SOLARIS  0
+#define CIX_PLATFORM_AIX      0
 
 
 // platform detection
 // CAUTION: test order matters
 #if defined(__MINGW32__)  // || defined(__MINGW64__)
-    #define CIX_PLATFORM_NAME  "mingw"
-    #define CIX_PLATFORM       CIX_PLATFORM_MINGW
+    #undef CIX_PLATFORM_MINGW
+    #define CIX_PLATFORM_MINGW  1
+    #define CIX_PLATFORM_NAME   "mingw"
 #elif defined(_WIN32)
-    #define CIX_PLATFORM_NAME  "windows"
-    #define CIX_PLATFORM       CIX_PLATFORM_WINDOWS
+    #undef CIX_PLATFORM_WINDOWS
+    #define CIX_PLATFORM_WINDOWS  1
+    #define CIX_PLATFORM_NAME   "windows"
 #elif defined(__CYGWIN__)
-    #define CIX_PLATFORM_NAME  "cygwin"
-    #define CIX_PLATFORM       CIX_PLATFORM_CYGWIN
+    #undef CIX_PLATFORM_CYGWIN
+    #define CIX_PLATFORM_CYGWIN  1
+    #define CIX_PLATFORM_NAME    "cygwin"
 #elif defined(__APPLE__)
     #include <TargetConditionals.h>
     #if TARGET_IPHONE_SIMULATOR
-        #define CIX_PLATFORM_NAME  "iossim"
-        #define CIX_PLATFORM       CIX_PLATFORM_IOS_SIMULATOR
+        #undef CIX_PLATFORM_IOS_SIMULATOR
+        #define CIX_PLATFORM_IOS_SIMULATOR  1
+        #define CIX_PLATFORM_NAME           "iossim"
     #elif TARGET_OS_IPHONE
+        #undef CIX_PLATFORM_IOS
+        #define CIX_PLATFORM_IOS   1
         #define CIX_PLATFORM_NAME  "ios"
-        #define CIX_PLATFORM       CIX_PLATFORM_IOS
     #elif TARGET_OS_MAC
-        #define CIX_PLATFORM_NAME  "macos"
-        #define CIX_PLATFORM       CIX_PLATFORM_MACOS
+        #undef CIX_PLATFORM_MACOS
+        #define CIX_PLATFORM_MACOS  1
+        #define CIX_PLATFORM_NAME   "macos"
     #else
         #error unknown apple platform
     #endif
 #elif defined(__ANDROID__)
-    #define CIX_PLATFORM_NAME  "android"
-    #define CIX_PLATFORM       CIX_PLATFORM_ANDROID
+    #undef CIX_PLATFORM_ANDROID
+    #define CIX_PLATFORM_ANDROID  1
+    #define CIX_PLATFORM_NAME     "android"
 #elif defined(__sun) && defined(__SVR4)
-    #define CIX_PLATFORM_NAME  "solaris"
-    #define CIX_PLATFORM       CIX_PLATFORM_SOLARIS
+    #undef CIX_PLATFORM_SOLARIS
+    #define CIX_PLATFORM_SOLARIS  1
+    #define CIX_PLATFORM_NAME     "solaris"
 #elif defined(__hpux)
+    #undef CIX_PLATFORM_HPUX
+    #define CIX_PLATFORM_HPUX  1
     #define CIX_PLATFORM_NAME  "hp-ux"
-    #define CIX_PLATFORM       CIX_PLATFORM_HPUX
 #elif defined(__aix)
+    #undef CIX_PLATFORM_AIX
+    #define CIX_PLATFORM_AIX   1
     #define CIX_PLATFORM_NAME  "aix"
-    #define CIX_PLATFORM       CIX_PLATFORM_AIX
 #elif defined(__DragonFly__)
-    #define CIX_PLATFORM_NAME  "dragonfly"
-    #define CIX_PLATFORM       CIX_PLATFORM_DRAGONFLY
+    #undef CIX_PLATFORM_DRAGONFLY
+    #define CIX_PLATFORM_DRAGONFLY  1
+    #define CIX_PLATFORM_NAME       "dragonfly"
 #elif defined(__FreeBSD__)
-    #define CIX_PLATFORM_NAME  "freebsd"
-    #define CIX_PLATFORM       CIX_PLATFORM_FREEBSD
+    #undef CIX_PLATFORM_FREEBSD
+    #define CIX_PLATFORM_FREEBSD  1
+    #define CIX_PLATFORM_NAME     "freebsd"
 #elif defined(__OpenBSD__)
-    #define CIX_PLATFORM_NAME  "openbsd"
-    #define CIX_PLATFORM       CIX_PLATFORM_OPENBSD
+    #undef CIX_PLATFORM_OPENBSD
+    #define CIX_PLATFORM_OPENBSD  1
+    #define CIX_PLATFORM_NAME     "openbsd"
 #elif defined(__NetBSD__)
-    #define CIX_PLATFORM_NAME  "netbsd"
-    #define CIX_PLATFORM       CIX_PLATFORM_NETBSD
+    #undef CIX_PLATFORM_NETBSD
+    #define CIX_PLATFORM_NETBSD  1
+    #define CIX_PLATFORM_NAME    "netbsd"
 #elif defined(__linux__)
-    #define CIX_PLATFORM_NAME  "linux"
-    #define CIX_PLATFORM       CIX_PLATFORM_LINUX
+    #undef CIX_PLATFORM_LINUX
+    #define CIX_PLATFORM_LINUX  1
+    #define CIX_PLATFORM_NAME   "linux"
 #else
     #error unknown platform
 #endif
 
+#if defined(__linux__)
+    #undef CIX_PLATFORM_LINUX
+    #define CIX_PLATFORM_LINUX  1
+#endif
 
 #if defined(__unix__)
-    #define CIX_IS_UNIX  1
-#else
-    #define CIX_IS_UNIX  0
+    #undef CIX_PLATFORM_UNIX
+    #define CIX_PLATFORM_UNIX  1
+#endif
+
+#if defined(_POSIX_VERSION)  // || defined(__unix__) || (defined(__APPLE__) && defined(__MACH__))
+    #undef CIX_PLATFORM_POSIX
+    #define CIX_PLATFORM_POSIX  1
 #endif
 
 
-#if defined(_POSIX_VERSION)
-    #define CIX_IS_POSIX  1
-#else
-    #define CIX_IS_POSIX  0
-#endif
 
-
-
-// endianness enum
+// supported endianness
+// * only one of those will be redefined to (1) by the detection logic below
 // * std::endian is C++20
 // * exotic endianness not supported
-// * values defined here are arbitrary
 // * see also <cix/endian.h>
-#define CIX_ENDIAN_LITTLE  1234
-#define CIX_ENDIAN_BIG     4321
+#define CIX_ENDIAN_LITTLE  0
+#define CIX_ENDIAN_BIG     0
 
 
 // compile-time endianness detection
 // detection logic from rapidjson
 // CAUTION: any modification here must be reported to endian.h
-#ifndef CIX_ENDIAN
-    // detect with GCC 4.6's macro
-    #ifdef __BYTE_ORDER__
-        #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-            #define CIX_ENDIAN  CIX_ENDIAN_LITTLE
-        #elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-            #define CIX_ENDIAN  CIX_ENDIAN_BIG
-        #else
-            #error Unknown machine endianness detected. User needs to define CIX_ENDIAN.
-        #endif  // __BYTE_ORDER__
 
-    // detect with GLIBC's endian.h
-    #elif defined(__GLIBC__)
-        #include <endian.h>
-        #if (__BYTE_ORDER == __LITTLE_ENDIAN)
-            #define CIX_ENDIAN  CIX_ENDIAN_LITTLE
-        #elif (__BYTE_ORDER == __BIG_ENDIAN)
-            #define CIX_ENDIAN  CIX_ENDIAN_BIG
-        #else
-            #error Unknown machine endianness detected. User needs to define CIX_ENDIAN.
-        #endif  // __GLIBC__
-
-    // detect with _LITTLE_ENDIAN and _BIG_ENDIAN macro
-    #elif defined(_LITTLE_ENDIAN) && !defined(_BIG_ENDIAN)
-        #define CIX_ENDIAN  CIX_ENDIAN_LITTLE
-    #elif defined(_BIG_ENDIAN) && !defined(_LITTLE_ENDIAN)
-        #define CIX_ENDIAN  CIX_ENDIAN_BIG
-
-    // detect with architecture macros
-    #elif defined(__sparc) || defined(__sparc__) || defined(_POWER) || defined(__powerpc__) || defined(__ppc__) || defined(__hpux) || defined(__hppa) || defined(_MIPSEB) || defined(_POWER) || defined(__s390__)
-        #define CIX_ENDIAN  CIX_ENDIAN_BIG
-    #elif defined(__i386__) || defined(__alpha__) || defined(__ia64) || defined(__ia64__) || defined(_M_IX86) || defined(_M_IA64) || defined(_M_ALPHA) || defined(__amd64) || defined(__amd64__) || defined(_M_AMD64) || defined(__x86_64) || defined(__x86_64__) || defined(_M_X64) || defined(__bfin__)
-        #define CIX_ENDIAN  CIX_ENDIAN_LITTLE
-    #elif defined(_MSC_VER) && (defined(_M_ARM) || defined(_M_ARM64))
-        #define CIX_ENDIAN  CIX_ENDIAN_LITTLE
-    // #elif defined(CIX_DOXYGEN_RUNNING)
-    //     #define CIX_ENDIAN  CIX_ENDIAN_LITTLE
+// detect with GCC 4.6's macro
+#ifdef __BYTE_ORDER__
+    #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+        #undef CIX_ENDIAN_LITTLE
+        #define CIX_ENDIAN_LITTLE  1
+    #elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+        #undef CIX_ENDIAN_BIG
+        #define CIX_ENDIAN_BIG  1
     #else
         #error unknown endianness
-    #endif
-#endif  // CIX_ENDIAN
+    #endif  // __BYTE_ORDER__
+
+// detect with GLIBC's endian.h
+#elif defined(__GLIBC__)
+    #include <endian.h>
+    #if (__BYTE_ORDER == __LITTLE_ENDIAN)
+        #undef CIX_ENDIAN_LITTLE
+        #define CIX_ENDIAN_LITTLE  1
+    #elif (__BYTE_ORDER == __BIG_ENDIAN)
+        #undef CIX_ENDIAN_BIG
+        #define CIX_ENDIAN_BIG  1
+    #else
+        #error unknown endianness
+    #endif  // __GLIBC__
+
+// detect with _LITTLE_ENDIAN and _BIG_ENDIAN macro
+#elif defined(_LITTLE_ENDIAN) && !defined(_BIG_ENDIAN)
+    #undef CIX_ENDIAN_LITTLE
+    #define CIX_ENDIAN_LITTLE  1
+#elif defined(_BIG_ENDIAN) && !defined(_LITTLE_ENDIAN)
+    #undef CIX_ENDIAN_BIG
+    #define CIX_ENDIAN_BIG  1
+
+// detect with architecture macros
+#elif defined(__sparc) || defined(__sparc__) || defined(_POWER) || defined(__powerpc__) || defined(__ppc__) || defined(__hpux) || defined(__hppa) || defined(_MIPSEB) || defined(_POWER) || defined(__s390__)
+    #undef CIX_ENDIAN_BIG
+    #define CIX_ENDIAN_BIG  1
+#elif defined(__i386__) || defined(__alpha__) || defined(__ia64) || defined(__ia64__) || defined(_M_IX86) || defined(_M_IA64) || defined(_M_ALPHA) || defined(__amd64) || defined(__amd64__) || defined(_M_AMD64) || defined(__x86_64) || defined(__x86_64__) || defined(_M_X64) || defined(__bfin__)
+    #undef CIX_ENDIAN_LITTLE
+    #define CIX_ENDIAN_LITTLE  1
+#elif defined(_MSC_VER) && (defined(_M_ARM) || defined(_M_ARM64))
+    #undef CIX_ENDIAN_LITTLE
+    #define CIX_ENDIAN_LITTLE  1
+// #elif defined(CIX_DOXYGEN_RUNNING)
+//     #undef CIX_ENDIAN_LITTLE
+//     #define CIX_ENDIAN_LITTLE  1
+#else
+    #error unknown endianness
+#endif

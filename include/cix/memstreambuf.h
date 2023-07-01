@@ -36,9 +36,11 @@ class basic_memstreambuf :
 public:
     typedef std::basic_streambuf<CharT, Traits> BaseT;
 
-    // TODO: check this
-    using BaseT::int_type;
+    using BaseT::char_type;
     using BaseT::traits_type;
+    using BaseT::int_type;
+    using BaseT::pos_type;
+    using BaseT::off_type;
 
 
 public:
@@ -55,7 +57,7 @@ public:
         : BaseT()
     {
         assert(!s.empty());
-        setg(
+        this->setg(
             const_cast<char_type*>(s.begin()),
             const_cast<char_type*>(s.begin()),
             const_cast<char_type*>(s.end()));
@@ -67,7 +69,7 @@ public:
     {
         assert(s);
         assert(n > 0);
-        setg(
+        this->setg(
             const_cast<char_type*>(s),
             const_cast<char_type*>(s),
             const_cast<char_type*>(s + n));
@@ -89,7 +91,7 @@ public:
             throw std::invalid_argument("basic_memstreambuf too big");
         }
 
-        setg(
+        this->setg(
             const_cast<char_type*>(begin),
             const_cast<char_type*>(begin),
             const_cast<char_type*>(end));
@@ -101,8 +103,8 @@ public:
 protected:
     virtual std::streamsize showmanyc() override
     {
-        const auto* ptr = gptr();
-        const auto* end = egptr();
+        const auto* ptr = this->gptr();
+        const auto* end = this->egptr();
 
         assert(ptr <= end);
 
@@ -111,9 +113,9 @@ protected:
 
     virtual int_type underflow() override
     {
-        const auto* ptr = gptr();
+        const auto* ptr = this->gptr();
 
-        if (ptr >= egptr())
+        if (ptr >= this->egptr())
             return traits_type::eof();
 
         return traits_type::to_int_type(*ptr);
@@ -124,10 +126,10 @@ protected:
         if (count == 0)
             return 0;
 
-        const auto* ptr = gptr();
+        const auto* ptr = this->gptr();
         const auto to_read = std::min(
             count,
-            static_cast<std::streamsize>(egptr() - ptr));
+            static_cast<std::streamsize>(this->egptr() - ptr));
 
         if (to_read == 0)
         {
@@ -136,7 +138,7 @@ protected:
         else
         {
             std::memcpy(s, ptr, static_cast<int>(to_read));
-            gbump(static_cast<int>(to_read));
+            this->gbump(static_cast<int>(to_read));
             return to_read;
         }
     }
@@ -154,9 +156,9 @@ protected:
 
         if (dir == std::ios_base::beg)
         {
-            if (off >= 0 && off < egptr() - eback())
+            if (off >= 0 && off < this->egptr() - this->eback())
             {
-                setg(eback(), eback() + off, egptr());
+                this->setg(this->eback(), this->eback() + off, this->egptr());
             }
             else
             {
@@ -166,10 +168,10 @@ protected:
         }
         else if (dir == std::ios_base::cur)
         {
-            if ((off >= 0 && off < egptr() - gptr()) ||
-                (off < 0 && std::abs(off) < gptr() - eback()))
+            if ((off >= 0 && off < this->egptr() - this->gptr()) ||
+                (off < 0 && std::abs(off) < this->gptr() - this->eback()))
             {
-                gbump(static_cast<int>(off));
+                this->gbump(static_cast<int>(off));
             }
             else
             {
@@ -179,9 +181,12 @@ protected:
         }
         else if (dir == std::ios_base::end)
         {
-            if (off <= 0 && std::abs(off) < egptr() - eback())
+            if (off <= 0 && std::abs(off) < this->egptr() - this->eback())
             {
-                setg(eback(), egptr() + static_cast<int>(off), egptr());
+                this->setg(
+                    this->eback(),
+                    this->egptr() + static_cast<int>(off),
+                    this->egptr());
             }
             else
             {
@@ -195,7 +200,7 @@ protected:
             throw std::invalid_argument("basic_memstreambuf::seekoff[dir]");
         }
 
-        return gptr() - eback();
+        return this->gptr() - this->eback();
     }
 
     virtual pos_type seekpos(
@@ -208,9 +213,12 @@ protected:
             throw std::invalid_argument("basic_memstreambuf::seekpos[which]");
         }
 
-        if (pos < egptr() - eback())
+        if (pos < this->egptr() - this->eback())
         {
-            setg(eback(), eback() + static_cast<int>(pos), egptr());
+            this->setg(
+                this->eback(),
+                this->eback() + static_cast<int>(pos),
+                this->egptr());
         }
         else
         {
@@ -224,14 +232,14 @@ protected:
 #if 0
     virtual int_type pbackfail(int_type c = traits_type::eof()) override
     {
-        const auto* begin = eback();
-        const auto* ptr = gptr();
+        const auto* begin = this->eback();
+        const auto* ptr = this->gptr();
         const auto gc = *(ptr - 1);
 
         if (ptr == begin || (c != traits_type::eof() && c != gc))
             return traits_type::eof();
 
-        gbump(-1);
+        this->gbump(-1);
 
         return traits_type::to_int_type(gc);
     }

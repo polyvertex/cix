@@ -36,7 +36,7 @@ public:
     memstream& open_read(const_pointer data, size_type size);  // enable read-only mode
     bool read_only() const;
 
-    memstream& clear(bool free_memory=false);  // also resets read-ony mode
+    memstream& clear(bool free_memory=false);  // also resets read-only mode
 
     bool empty() const;
     size_type size() const;
@@ -74,20 +74,18 @@ public:
     memstream& read(std::uint8_t& value);
 
     // integral type write
-    template <
-        typename T,
-        typename std::enable_if_t<
-            std::is_integral<T>::value &&
-            sizeof(T) >= 2, int> = 0>
-    memstream& write(const T value);
+    template <typename T>
+    std::enable_if_t<
+        std::is_integral<T>::value && sizeof(T) >= 2,
+        memstream&>
+    write(const T value);
 
     // integral type read
-    template <
-        typename T,
-        typename std::enable_if_t<
-            std::is_integral<T>::value &&
-            sizeof(T) >= 2, int> = 0>
-    memstream& read(T& value);
+    template <typename T>
+    std::enable_if_t<
+        std::is_integral<T>::value && sizeof(T) >= 2,
+        memstream&>
+    read(T& value);
 
     // third-party write
     pointer prepare_write(size_type estimated_extra_size);
@@ -111,5 +109,6 @@ protected:
 };
 
 }  // namespace cix
+
 
 #include "memstream.inl.h"

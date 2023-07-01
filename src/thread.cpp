@@ -10,7 +10,7 @@ namespace cix {
 
 tid_t current_thread_id() noexcept
 {
-    #if CIX_PLATFORM == CIX_PLATFORM_WINDOWS
+    #if CIX_PLATFORM_WINDOWS
         return GetCurrentThreadId();
     #else
         return std::this_thread::get_id();
@@ -20,7 +20,7 @@ tid_t current_thread_id() noexcept
 
 pid_t current_process_id() noexcept
 {
-    #if CIX_PLATFORM == CIX_PLATFORM_WINDOWS
+    #if CIX_PLATFORM_WINDOWS
         return GetCurrentProcessId();
     #else
         return getpid();

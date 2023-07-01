@@ -6,7 +6,7 @@
 
 #include "detail/ensure_cix.h"
 
-#if CIX_PLATFORM == CIX_PLATFORM_WINDOWS
+#if CIX_PLATFORM_WINDOWS
 
 namespace cix {
 
@@ -31,18 +31,16 @@ public:
     typedef HANDLE native_handle_type;
 
 public:
+    CIX_NONCOPYABLE(win_recursive_mutex)
+
     win_recursive_mutex();
-    win_recursive_mutex(const win_recursive_mutex&) = delete;
-    win_recursive_mutex(win_recursive_mutex&&) = delete;
     ~win_recursive_mutex();
 
     void lock();
     bool try_lock();
     void unlock();
-    inline native_handle_type native_handle() { return m_handle; }
 
-    win_recursive_mutex& operator=(const win_recursive_mutex&) = delete;
-    win_recursive_mutex& operator=(win_recursive_mutex&&) = delete;
+    native_handle_type native_handle() { return m_handle; }
 
 private:
     native_handle_type m_handle;
@@ -51,4 +49,4 @@ private:
 
 }  // namespace cix
 
-#endif  // #if CIX_PLATFORM == CIX_PLATFORM_WINDOWS
+#endif  // #if CIX_PLATFORM_WINDOWS

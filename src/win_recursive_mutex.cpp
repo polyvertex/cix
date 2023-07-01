@@ -5,7 +5,7 @@
 #include <cix/cix>
 #include <cix/detail/intro.h>
 
-#if CIX_PLATFORM == CIX_PLATFORM_WINDOWS
+#if CIX_PLATFORM_WINDOWS
 
 namespace cix {
 
@@ -55,7 +55,8 @@ bool win_recursive_mutex::try_lock()
 
         case WAIT_ABANDONED:  // CAUTION: potential data corruption
             assert(0);
-            return true;
+            // CIX_THROW_RUNTIME("win_recursive_mutex {:#08x} abandoned", handle);
+            CIX_THROW_RUNTIME("win_recursive_mutex abandoned");
 
         case WAIT_FAILED:
             CIX_THROW_WINERR("win_recursive_mutex::try_lock failed");
@@ -83,4 +84,4 @@ void win_recursive_mutex::unlock()
 
 }  // namespace cix
 
-#endif  // #if CIX_PLATFORM == CIX_PLATFORM_WINDOWS
+#endif  // #if CIX_PLATFORM_WINDOWS

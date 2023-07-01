@@ -27,13 +27,27 @@
 // * underflow_error
 //     exception class to report arithmetic underflows
 
-#define CIX_THROW_BADARG(msg, ...)    CIX_THROW_STDEXC(::std::invalid_argument, msg, __VA_ARGS__)
-#define CIX_THROW_LENGTH(msg, ...)    CIX_THROW_STDEXC(::std::length_error, msg, __VA_ARGS__)
-#define CIX_THROW_LOGIC(msg, ...)     CIX_THROW_STDEXC(::std::logic_error, msg, __VA_ARGS__)
-#define CIX_THROW_OUTRANGE(msg, ...)  CIX_THROW_STDEXC(::std::out_of_range, msg, __VA_ARGS__)
-#define CIX_THROW_RUNTIME(msg, ...)   CIX_THROW_STDEXC(::std::runtime_error, msg, __VA_ARGS__)
-#define CIX_THROW_OVERFLOW(msg, ...)  CIX_THROW_STDEXC(::std::overflow_error, msg, __VA_ARGS__)
-#define CIX_THROW_UNDERFLOW(msg, ...) CIX_THROW_STDEXC(::std::underflow_error, msg, __VA_ARGS__)
+#define CIX_THROW_BADARG(msg, ...) \
+    CIX_THROW_STDEXC(::std::invalid_argument, msg, __VA_ARGS__)
+
+#define CIX_THROW_LENGTH(msg, ...) \
+    CIX_THROW_STDEXC(::std::length_error, msg, __VA_ARGS__)
+
+#define CIX_THROW_LOGIC(msg, ...) \
+    CIX_THROW_STDEXC(::std::logic_error, msg, __VA_ARGS__)
+
+#define CIX_THROW_OUTRANGE(msg, ...) \
+    CIX_THROW_STDEXC(::std::out_of_range, msg, __VA_ARGS__)
+
+#define CIX_THROW_RUNTIME(msg, ...) \
+    CIX_THROW_STDEXC(::std::runtime_error, msg, __VA_ARGS__)
+
+#define CIX_THROW_OVERFLOW(msg, ...) \
+    CIX_THROW_STDEXC(::std::overflow_error, msg, __VA_ARGS__)
+
+#define CIX_THROW_UNDERFLOW(msg, ...) \
+    CIX_THROW_STDEXC(::std::underflow_error, msg, __VA_ARGS__)
+
 
 #define CIX_THROW_STDEXC(exc_klass, msg, ...) \
     throw exc_klass(::fmt::format(msg, __VA_ARGS__))

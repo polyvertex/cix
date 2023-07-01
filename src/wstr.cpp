@@ -893,7 +893,7 @@ wstr wstr::path_root(bool normalize, size_type* out_tail_pos) const
 
                 if (normalize)
                 {
-                    norm_dest.append(WSTR("UNC"));
+                    norm_dest.append(CIX_WSTR("UNC"));
                     norm_dest.append(wstr::native_path_separator());
                 }
 
@@ -1016,7 +1016,7 @@ wstr wstr::path_dir() const
     last = this->length();
     if (last == 0)
     {
-        return wstr(WSTR("."));  // dirname() compliant
+        return wstr(CIX_WSTR("."));  // dirname() compliant
     }
     else if (last >= 2 &&
         (*this)[1] == value_type(':') && wstr::is_asciiletter((*this)[0]))
@@ -1054,18 +1054,18 @@ wstr wstr::path_dir() const
     if (last == npos)
     {
         // no separators
-        return wstr(WSTR("."));
+        return wstr(CIX_WSTR("."));
     }
     else if (last + 1 == this->length())
     {
         // has trailing separator(s)
         last = this->find_last_not_of(wstr::path_separators(), last);
         if (last == npos)  // has only separators in the whole string
-            return wstr(WSTR("/"));
+            return wstr(CIX_WSTR("/"));
 
         last = this->find_last_of(wstr::path_separators(), last);
         if (last == npos)  // has only a name and trailing separator(s)
-            return wstr(WSTR("."));
+            return wstr(CIX_WSTR("."));
         else if (last == 0)
             ++last;
 
@@ -1238,10 +1238,10 @@ wstr& wstr::path_replace_ext(bool all, const wstr& new_extension)
 bool wstr::path_has_ext(const wstr& extension, bool case_sensitive) const
 {
     assert(!extension.empty());
-    assert(extension[0] != WSTR('.'));
+    assert(extension[0] != CIX_WSTR('.'));
     return
         (this->length() > extension.length() + 1) &&
-        this->ends_with(wstr(WSTR(".")) + extension, case_sensitive);
+        this->ends_with(wstr(CIX_WSTR(".")) + extension, case_sensitive);
 }
 
 wstr wstr::path_last_dir_and_name() const

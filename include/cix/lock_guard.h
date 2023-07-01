@@ -9,15 +9,17 @@
 namespace cix {
 
 template <typename MutexT>
-class lock_guard : private noncopyable
+class lock_guard
 {
-    // implements the lock() and unlock() methods in addition of the semantics
-    // of std::lock_guard
+    // implements the the semantics of std::lock_guard, plus the lock() and
+    // unlock() methods
 
 public:
     typedef MutexT mutex_type;
 
 public:
+    CIX_NONCOPYABLE(lock_guard)
+
     lock_guard() = delete;
 
     explicit lock_guard(MutexT& mutex)
