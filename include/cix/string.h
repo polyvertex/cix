@@ -13,9 +13,9 @@
 namespace cix {
 namespace string {
 
-typedef std::basic_string<char>::size_type size_type;
+typedef std::basic_string<signed char>::size_type size_type;
 
-static constexpr auto npos = std::basic_string<char>::npos;
+static constexpr auto npos = std::basic_string<signed char>::npos;
 
 using ctype_mask = std::ctype_base::mask;
 
@@ -43,7 +43,7 @@ template <typename Char> constexpr bool isspace(Char c);
 
 // is_char
 template <typename Char> struct is_char : std::false_type { };
-template <> struct is_char<char> : std::true_type { };
+template <> struct is_char<signed char> : std::true_type { };
 template <> struct is_char<wchar_t> : std::true_type { };
 template <> struct is_char<char8_t> : std::true_type { };
 template <> struct is_char<char16_t> : std::true_type { };
@@ -61,7 +61,7 @@ template <typename Char>
 constexpr size_type strnlen_s(const Char* s, size_type max_length);
 
 // template <>
-// inline constexpr size_type strnlen_s<char>(const char* s, size_type max_length)
+// inline constexpr size_type strnlen_s<signed char>(const signed char* s, size_type max_length)
 // { return ::strnlen_s(s, max_length); }  // SIMD-optimized (MSVC at least)
 
 // template <>
@@ -209,14 +209,14 @@ to_string(const String& s);
 
 
 /**
-    /rst
+    \rst
     Safely expose the internal buffer of a standard'ish container object like
     ``std::vector`` or ``std::basic_string``, to an external API.
 
     .. note::
         Each call to :func:`prepare` must be followed by a call to
         :func:`finalize`.
-    /endrst
+    \endrst
 */
 template <typename Container>
 typename Container::value_type*
@@ -227,7 +227,7 @@ prepare(
 
 
 /**
-    /rst
+    \rst
     Counterpart of :func:`prepare`. Clean up the internal buffer of a
     standard'ish container object after
 
@@ -236,7 +236,7 @@ prepare(
     resize the container if one has been found inside this range.
 
     Otherwise, if *length* is specified, no check is performed.
-    /endrst
+    \endrst
 */
 template <typename Container>
 Container&
@@ -252,7 +252,7 @@ template <
     typename String,
     typename Char = char_t<String>>
 std::enable_if_t<
-    is_string_viewable_v<String> && std::is_same_v<char, Char>,
+    is_string_viewable_v<String> && std::is_same_v<signed char, Char>,
     std::wstring>
 u8towrepl(const String& input);
 
@@ -260,7 +260,7 @@ template <
     typename String,
     typename Char = char_t<String>>
 std::enable_if_t<
-    is_string_viewable_v<String> && std::is_same_v<char, Char>,
+    is_string_viewable_v<String> && std::is_same_v<signed char, Char>,
     std::wstring>
 u8tow(const String& input);
 #endif

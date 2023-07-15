@@ -11,8 +11,8 @@
 namespace cix {
 
 /**
-    /rst
-    An implementation of std::recursive_mutex for Windows platforms.
+    \rst
+    An implementation of ``std::recursive_mutex`` for Windows platforms.
 
     It internally uses a Windows' Mutex object. ``CRITICAL_SECTION`` objects are
     *slightly* faster but are less secure than a Mutex for the following
@@ -20,10 +20,11 @@ namespace cix {
 
     * A thread that terminates without releasing a ``CRITICAL_SECTION`` it owns
       will leave it in an undefined state.
+
     * Additionally, if a ``CRITICAL_SECTION`` object is deleted while being
       still owned, the state of the thread(s) waiting for ownership of the
       deleted critical section is undefined.
-    /endrst
+    \endrst
 */
 class win_recursive_mutex
 {

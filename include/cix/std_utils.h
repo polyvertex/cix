@@ -18,8 +18,12 @@
 namespace cix {
 
 
-/// Check whether ``T`` is an integer type, that is an integral type that is not
-/// a bool, a char nor a wchar_t.
+/**
+    \rst
+    Check whether ``T`` is an integer type, that is an integral type that is not
+    a ``bool``, a ``char`` nor a ``wchar_t``.
+    \endrst
+*/
 template <typename T>
 using is_integer = ::std::integral_constant<
     bool,
@@ -28,12 +32,16 @@ using is_integer = ::std::integral_constant<
         !::std::is_same<T, char>::value &&
         !::std::is_same<T, wchar_t>::value>;
 
-/// A shortcut to :member:`is_integer<T>::value`
+/**
+    \rst
+    A shortcut to :member:`is_integer<T>::value`
+    \endrst
+*/
 template <typename T>
 using is_integer_v = typename is_integer<T>::value;
 
 
-// number of elements in a regular C array
+/// number of elements in a regular C array
 template <typename T, std::size_t s>
 inline constexpr std::size_t countof(T (&arr)[s])
 {
@@ -42,7 +50,7 @@ inline constexpr std::size_t countof(T (&arr)[s])
 }
 
 
-// number of elements in a standard container
+/// number of elements in a standard container
 template <typename T>
 inline constexpr std::size_t countof(T&& arr)
 {
@@ -50,7 +58,7 @@ inline constexpr std::size_t countof(T&& arr)
 }
 
 
-// forward arg as value of decayed type
+/// forward arg as value of decayed type
 template <class T>
 inline typename std::decay<T>::type decay_copy(T&& arg)
 {
@@ -117,12 +125,12 @@ InputIt find_weak_ptr(InputIt first, InputIt last, const std::shared_ptr<T>& sha
 
 
 /**
-    /rst
+    \rst
     A "less" functor for ``std::shared_ptr<T>``.
 
     .. note::
         Ensure ``T::operator<(const T&)`` is implemented before using this.
-    /endrst
+    \endrst
 */
 template <typename T>
 struct shared_less
